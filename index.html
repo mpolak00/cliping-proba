@@ -840,107 +840,86 @@ async function loadFFmpeg() {
    Returns { videoFilter, audioFilter, inputArgs }
    inputArgs = extra -i flags (logo, outro image)
 ───────────────────────────────────────────────────────────── */
-function buildFilters(s, hasLogo, hasOutroImg) {
-  /* ── Video filter chain ── */
-  const filters = [];
+function safeText(t) {
+  // Escape text for FFmpeg drawtext — avoid chars that break filter parsing
+  return (t || ‘’).replace(/\\/g, ‘/’).replace(/’/g, ‘’).replace(/:/g, ‘ ‘).replace(/\[/g, ‘’).replace(/\]/g, ‘’).replace(/,/g, ‘ ‘).replace(/;/g, ‘ ‘).trim();
+}
 
-  // 1. Scale + pad to 1080x1920 (9:16 vertical)
-  filters.push("scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,setsar=1");
+function buildFilters(s, hasLogo) {
+  /* ── Build video filter list ── */
+  const vf = [];
 
-  // 2. Equalizer: brightness / contrast / saturation
-  const br = s.brightness.toFixed(3), ct = s.contrast.toFixed(3), sat = s.saturation.toFixed(3);
-  if (Math.abs(s.brightness) > 0.001 || Math.abs(s.contrast - 1) > 0.001 || Math.abs(s.saturation - 1) > 0.001) {
-    filters.push(`eq=brightness=${br}:contrast=${ct}:saturation=${sat}`);
+  // 1. Scale to 9:16 — landscape gets padded with black bars, portrait fits
+  vf.push(‘scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black’);
+
+  // 2. Speed (setpts changes video PTS = duration)
+  if (Math.abs(s.speed - 1.0) > 0.02) {
+    vf.push(`setpts=${(1 / s.speed).toFixed(4)}*PTS`);
   }
 
-  // 3. Speed change on video (setpts) — must come before other time-based filters
-  if (Math.abs(s.speed - 1.0) > 0.01) {
-    filters.push(`setpts=${(1/s.speed).toFixed(4)}*PTS`);
+  // 3. Color grading — only apply if values differ from default
+  const hasBr = Math.abs(s.brightness) > 0.01;
+  const hasCt = Math.abs(s.contrast - 1.0) > 0.01;
+  const hasSat = Math.abs(s.saturation - 1.0) > 0.01;
+  if (hasBr || hasCt || hasSat) {
+    vf.push(`eq=brightness=${s.brightness.toFixed(2)}:contrast=${s.contrast.toFixed(2)}:saturation=${s.saturation.toFixed(2)}`);
   }
 
-  // 4. Zoom — simple static scale+crop (zoompan is too slow for wasm)
+  // 4. Static zoom (scale up + crop center) — skip zoompan (too slow for wasm)
   if (s.zoom > 0) {
-    const factor = (1 + s.zoom * 0.008).toFixed(4); // 0-10 → 1.000-1.080
-    filters.push(`scale=iw*${factor}:ih*${factor},crop=1080:1920`);
+    const f = (1 + s.zoom * 0.006).toFixed(3); // zoom 1–10 → scale 1.006–1.060
+    vf.push(`scale=iw*${f}:ih*${f},crop=1080:1920`);
   }
 
-  // 5. Film grain (noise) — use simple noise filter
-  if (s.grain) {
-    filters.push("noise=alls=10:allf=t");
-  }
+  // 5. Film grain
+  if (s.grain) vf.push(‘noise=alls=8:allf=t’);
 
-  // 6. Vignette — simple darkening at edges via curves
-  if (s.vignette) {
-    filters.push("vignette=PI/4");
-  }
+  // 6. Horizontal flip
+  if (s.flip) vf.push(‘hflip’);
 
-  // 7. Horizontal flip
-  if (s.flip) {
-    filters.push("hflip");
-  }
-
-  // 8. Caption drawtext — donja trećina, white + black shadow
+  // 7. Captions (manual subtitle text)
   if (s.captionsEnabled && s.captionsText) {
-    const safe = s.captionsText
-      .replace(/\\/g, '\\\\')
-      .replace(/'/g, "’")   // replace apostrophe with typographic quote (safe)
-      .replace(/:/g, "\\:")
-      .replace(/\n/g, ' ');
-    filters.push(
-      `drawtext=text='${safe}':fontsize=34:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.75:box=1:boxcolor=black@0.5:boxborderw=6`
-    );
+    const ct = safeText(s.captionsText);
+    if (ct) vf.push(`drawtext=text=’${ct}’:fontsize=34:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.78:box=1:boxcolor=black@0.55:boxborderw=6`);
   }
 
-  // 9. URL / branding text overlay
+  // 8. URL branding text
   if (s.overlayText) {
-    const safeUrl = s.overlayText
-      .replace(/\\/g, '\\\\')
-      .replace(/'/g, "’")
-      .replace(/:/g, "\\:");
-    const hexColor = s.textColor.startsWith('#') ? s.textColor.slice(1) : s.textColor;
-    filters.push(
-      `drawtext=text='${safeUrl}':fontsize=${Math.round(s.fontSize)}:fontcolor=0x${hexColor}:shadowcolor=black@0.8:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h-text_h-50`
-    );
+    const ot = safeText(s.overlayText);
+    const hex = (s.textColor || ‘#ffffff’).replace(‘#’, ‘’);
+    if (ot) vf.push(`drawtext=text=’${ot}’:fontsize=${Math.round(s.fontSize)}:fontcolor=0x${hex}:shadowcolor=black@0.8:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h-text_h-48`);
   }
 
-  const vfBase = filters.join(',');
+  const vfStr = vf.join(‘,’);
 
-  /* ── Audio filter chain ── */
-  const pitchFactor = 1 + (s.pitch / 100);
-  const baseSampleRate = 44100;
-  const newRate = Math.round(baseSampleRate * pitchFactor);
-  const tempoNeeded = s.speed / pitchFactor;
-  const tempoClamp = Math.max(0.5, Math.min(2.0, tempoNeeded));
+  /* ── Build audio filter ── */
+  const pitch = 1 + (s.pitch / 100);
+  const rate = Math.round(44100 * pitch);
+  const tempo = Math.max(0.5, Math.min(2.0, s.speed / pitch));
+  const af = [];
+  if (Math.abs(pitch - 1.0) > 0.01) af.push(`asetrate=${rate}`);
+  if (Math.abs(tempo - 1.0) > 0.01) af.push(`atempo=${tempo.toFixed(4)}`);
+  af.push(‘volume=1.3’);
+  const afStr = af.join(‘,’);
 
-  const audioParts = [];
-  if (Math.abs(pitchFactor - 1.0) > 0.005) audioParts.push(`asetrate=${newRate}`);
-  if (Math.abs(tempoClamp - 1.0) > 0.005) audioParts.push(`atempo=${tempoClamp.toFixed(4)}`);
-  audioParts.push('aresample=44100,volume=1.5');
-  const audioFilter = audioParts.join(',');
+  /* ── Assemble FFmpeg args (video + logo) ── */
+  // Strategy: use -vf for no-logo (simpler, more stable), -filter_complex for logo
+  let useFilterComplex = false;
+  let filterComplexStr = ‘’;
 
-  /* ── Build filter_complex ── */
-  let videoFilter;
   if (hasLogo) {
-    const pad = 36, ls = s.logoSize;
-    const posMap = {
-      BR: `x=W-w-${pad}:y=H-h-${pad}`,
-      BL: `x=${pad}:y=H-h-${pad}`,
-      TR: `x=W-w-${pad}:y=${pad}`,
-      TL: `x=${pad}:y=${pad}`,
-    };
-    const pos = posMap[s.logoPosCode] || posMap['BR'];
-    const opa = s.logoOpacity.toFixed(2);
-    // Correct alpha: use colorchannelmixer on logo stream, not overlay alpha param
-    videoFilter = [
-      `[0:v]${vfBase}[vbase]`,
-      `[1:v]scale=${ls}:${ls}:force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=${opa}[logoa]`,
-      `[vbase][logoa]overlay=${pos}[vout]`
-    ].join(';');
-  } else {
-    videoFilter = `[0:v]${vfBase}[vout]`;
+    useFilterComplex = true;
+    const pad = 30, ls = s.logoSize;
+    const pos = { BR:`W-w-${pad}:H-h-${pad}`, BL:`${pad}:H-h-${pad}`, TR:`W-w-${pad}:${pad}`, TL:`${pad}:${pad}` }[s.logoPosCode] || `W-w-${pad}:H-h-${pad}`;
+    const opa = Math.min(1, Math.max(0, s.logoOpacity)).toFixed(2);
+    filterComplexStr = [
+      `[0:v]${vfStr}[vbase]`,
+      `[1:v]scale=${ls}:${ls}:force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=${opa}[logo]`,
+      `[vbase][logo]overlay=x=${pos}[vout]`
+    ].join(‘;’);
   }
 
-  return { videoFilter, audioFilter };
+  return { vfStr, afStr, useFilterComplex, filterComplexStr };
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -997,41 +976,34 @@ async function runBrand() {
     }
 
     // ── Step 4: Build filter graph ──
-    const { videoFilter, audioFilter } = buildFilters(s, hasLogo, hasOutroImg);
+    const { vfStr, afStr, useFilterComplex, filterComplexStr } = buildFilters(s, hasLogo);
     log('Filter graph izgrađen ✓', 'ok');
 
     // ── Step 5: Process main video ──
     setProgress(18, 'FFmpeg procesira glavni video...');
 
-    // Build ffmpeg args — audio filter embedded in filter_complex to avoid conflicts
     const mainArgs = ['-i', 'input.mp4'];
     if (hasLogo) mainArgs.push('-i', 'logo.png');
 
-    // Embed audio filter into filter_complex alongside video filter
-    const fullFC = videoFilter.replace('[vout]', '[vout]') +
-      `;[0:a]${audioFilter}[aout]`;
+    if (useFilterComplex) {
+      // Logo: filter_complex for video, map audio directly
+      mainArgs.push('-filter_complex', filterComplexStr, '-map', '[vout]', '-map', '0:a?');
+    } else {
+      // No logo: simpler -vf (more stable in wasm)
+      mainArgs.push('-vf', vfStr);
+    }
+
+    // Audio filter via -af (separate from video, handles missing audio gracefully with 0:a?)
+    if (afStr) mainArgs.push('-af', afStr);
 
     mainArgs.push(
-      '-filter_complex', fullFC,
-      '-map', '[vout]',
-      '-map', '[aout]',
-    );
-
-    // Output codec flags — ultrafast for client-side performance
-    mainArgs.push(
-      '-c:v', 'libx264',
-      '-preset', 'ultrafast',
-      '-crf', '23',
-      '-pix_fmt', 'yuv420p',
-      '-c:a', 'aac',
-      '-b:a', '128k',
-      '-movflags', '+faststart',
-      '-r', '30',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', '128k',
+      '-movflags', '+faststart', '-r', '30',
       '-y', 'main_out.mp4'
     );
 
-    log('Pokretam FFmpeg za glavni video...', 'warn');
-    log('Argumenti: ' + mainArgs.filter((_,i,a) => a[i-1] !== '-filter_complex').join(' '));
+    log('Pokretam FFmpeg...', 'warn');
 
     await ffmpeg.run(...mainArgs);
     log('Glavni video obrađen ✓', 'ok');
@@ -1073,67 +1045,64 @@ async function runBrand() {
       // Duration = 2 seconds
       outroArgs.push('-t', '2');
 
-      // Build outro filter_complex — no fade (unstable in wasm), simple overlay
-      let outroFC = '';
-      const scaleBg = hasOutroImg
-        ? '[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,setsar=1'
-        : '[0:v]null';
+      // Build outro — simple black screen + optional logo + text (no fade, no filter_complex if avoidable)
       const ls = s.logoSize;
-      const logoIdx = 1; // logo is always input index 1 in outro
-
-      if (hasLogo && outroText) {
-        outroFC = [
-          `${scaleBg}[obg]`,
-          `[${logoIdx}:v]scale=${ls}:${ls}:force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=${s.logoOpacity.toFixed(2)}[ologoa]`,
-          `[obg][ologoa]overlay=x=(W-w)/2:y=(H-h)/2-50[owithlogo]`,
-          `[owithlogo]drawtext=text='${outroTextSafe}':fontsize=40:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2+${ls/2+20}[oout]`
-        ].join(';');
-      } else if (hasLogo) {
-        outroFC = [
-          `${scaleBg}[obg]`,
-          `[${logoIdx}:v]scale=${ls}:${ls}:force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=${s.logoOpacity.toFixed(2)}[ologoa]`,
-          `[obg][ologoa]overlay=x=(W-w)/2:y=(H-h)/2[oout]`
-        ].join(';');
-      } else if (outroText) {
-        outroFC = `${scaleBg},drawtext=text='${outroTextSafe}':fontsize=42:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2[oout]`;
-      } else {
-        outroFC = `${scaleBg}[oout]`;
-      }
-
-      outroArgs.push(
-        '-filter_complex', outroFC,
-        '-map', '[oout]',
-        '-an', // no audio for outro
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast',
-        '-crf', '23',
-        '-pix_fmt', 'yuv420p',
-        '-r', '30',
-        '-y', 'outro.mp4'
-      );
+      const ot = safeText(outroText);
 
       try {
-        await ffmpeg.run(...outroArgs);
+        if (hasLogo) {
+          // With logo: need filter_complex for overlay
+          const opa = Math.min(1, Math.max(0, s.logoOpacity)).toFixed(2);
+          let oFC;
+          if (ot) {
+            oFC = [
+              `[0:v]scale=1080:1920[obg]`,
+              `[1:v]scale=${ls}:${ls}:force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=${opa}[ologoa]`,
+              `[obg][ologoa]overlay=x=(W-w)/2:y=(H-h)/2-40[owl]`,
+              `[owl]drawtext=text='${ot}':fontsize=38:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2+${Math.round(ls/2)+20}[oout]`
+            ].join(';');
+          } else {
+            oFC = [
+              `[0:v]scale=1080:1920[obg]`,
+              `[1:v]scale=${ls}:${ls}:force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=${opa}[ologoa]`,
+              `[obg][ologoa]overlay=x=(W-w)/2:y=(H-h)/2[oout]`
+            ].join(';');
+          }
+          await ffmpeg.run(
+            '-f', 'lavfi', '-i', 'color=c=black:s=1080x1920:r=30',
+            '-i', 'logo.png', '-t', '2',
+            '-filter_complex', oFC, '-map', '[oout]', '-an',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-r', '30', '-y', 'outro.mp4'
+          );
+        } else if (ot) {
+          // Text only — simple -vf drawtext on black
+          await ffmpeg.run(
+            '-f', 'lavfi', '-i', 'color=c=black:s=1080x1920:r=30', '-t', '2',
+            '-vf', `drawtext=text='${ot}':fontsize=44:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2`,
+            '-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-r', '30', '-y', 'outro.mp4'
+          );
+        } else {
+          // Plain black 2s
+          await ffmpeg.run(
+            '-f', 'lavfi', '-i', 'color=c=black:s=1080x1920:r=30', '-t', '2',
+            '-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-r', '30', '-y', 'outro.mp4'
+          );
+        }
         log('Outro ekran generiran ✓', 'ok');
 
-        // ── Step 7: Concat main + outro ──
+        // ── Step 7: Concat main + outro using re-encode (concat demuxer requires same streams) ──
         setProgress(90, 'Spajam outro s videom...');
-        // Write concat list
-        ffmpeg.FS('writeFile', 'concat_list.txt',
-          new TextEncoder().encode("file 'main_out.mp4'\nfile 'outro.mp4'\n")
-        );
-
         await ffmpeg.run(
-          '-f', 'concat',
-          '-safe', '0',
-          '-i', 'concat_list.txt',
-          '-c', 'copy',
-          '-y', 'final_out.mp4'
+          '-i', 'main_out.mp4', '-i', 'outro.mp4',
+          '-filter_complex', '[0:v][0:a][1:v]concat=n=2:v=1:a=0[vout]',
+          '-map', '[vout]',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p',
+          '-an', '-movflags', '+faststart', '-r', '30', '-y', 'final_out.mp4'
         );
         finalFile = 'final_out.mp4';
         log('Concat završen ✓', 'ok');
       } catch (err) {
-        log('Outro generiranje nije uspjelo, nastavak bez outra: ' + err.message, 'warn');
+        log('Outro nije uspio, nastavljam bez outra: ' + err.message, 'warn');
         // Continue without outro
       }
     }
