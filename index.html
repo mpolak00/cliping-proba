@@ -109,6 +109,7 @@
 
     /* ─── Drop zones ─── */
     .drop-zone {
+      position: relative;
       border: 2px dashed var(--border);
       border-radius: 10px;
       padding: 28px 16px;
@@ -327,7 +328,7 @@
       <div>
         <span class="lbl">Video *</span>
         <div class="drop-zone" id="dz-video">
-          <input type="file" id="inp-video" accept="video/*" style="display:none" />
+          <input type="file" id="inp-video" accept="video/*" style="opacity:0;position:absolute;inset:0;width:100%;height:100%;cursor:pointer;z-index:2;" />
           <i class="fa-solid fa-film" style="font-size:26px;color:var(--muted);display:block;margin-bottom:8px;"></i>
           <p id="lbl-video" style="font-size:12px;color:var(--muted);margin:0;">MP4, MOV, WEBM, MKV<br><span style="font-size:10px;">maks. 500 MB</span></p>
         </div>
@@ -337,7 +338,7 @@
       <div>
         <span class="lbl">Logo PNG (opcionalno)</span>
         <div class="drop-zone" id="dz-logo">
-          <input type="file" id="inp-logo" accept="image/*" style="display:none" />
+          <input type="file" id="inp-logo" accept="image/*" style="opacity:0;position:absolute;inset:0;width:100%;height:100%;cursor:pointer;z-index:2;" />
           <i class="fa-solid fa-stamp" style="font-size:26px;color:var(--muted);display:block;margin-bottom:8px;"></i>
           <p id="lbl-logo" style="font-size:12px;color:var(--muted);margin:0;">Logo / watermark<br><span style="font-size:10px;">PNG s alfa kanalom</span></p>
         </div>
@@ -347,7 +348,7 @@
       <div>
         <span class="lbl">Outro slika (opcionalno)</span>
         <div class="drop-zone" id="dz-outro">
-          <input type="file" id="inp-outro" accept="image/*" style="display:none" />
+          <input type="file" id="inp-outro" accept="image/*" style="opacity:0;position:absolute;inset:0;width:100%;height:100%;cursor:pointer;z-index:2;" />
           <i class="fa-solid fa-image" style="font-size:26px;color:var(--muted);display:block;margin-bottom:8px;"></i>
           <p id="lbl-outro" style="font-size:12px;color:var(--muted);margin:0;">Outro pozadinska slika<br><span style="font-size:10px;">PNG / JPG</span></p>
         </div>
@@ -661,12 +662,8 @@ function setupDropZone(dzId, inputId, labelId, onFile) {
   const inp = document.getElementById(inputId);
   const lbl = document.getElementById(labelId);
 
-  // Click handler on drop zone — opens file dialog
-  dz.addEventListener('click', (e) => {
-    // Prevent double-trigger if click originated on the input itself
-    if (e.target === inp) return;
-    inp.click();
-  });
+  // No JS click() needed — input is overlaid directly on drop zone (opacity:0, inset:0)
+  // Native tap/click hits the input directly — works on iOS Safari + Android Chrome
 
   dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
   dz.addEventListener('dragleave', e => { if (!dz.contains(e.relatedTarget)) dz.classList.remove('drag-over'); });
