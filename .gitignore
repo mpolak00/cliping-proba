@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.mp4
+*.mov
+*.webm
+data/*.db
+data/*.db-shm
+data/*.db-wal
+.env
+.env.local
+tmp/
+/tmp/uploads/

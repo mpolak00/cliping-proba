@@ -1,0 +1,129 @@
+/* Custom styles on top of Tailwind CDN */
+
+:root {
+  --neon: #00ff88;
+  --neon-dim: #00cc6a;
+  --dark-bg: #0a0a0f;
+  --card-bg: #111118;
+  --border: #1e1e2e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--dark-bg);
+  color: #e2e8f0;
+  font-family: 'Inter', system-ui, sans-serif;
+  margin: 0;
+  min-height: 100vh;
+}
+
+/* Neon glow on buttons */
+.btn-neon {
+  background: var(--neon);
+  color: #000;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 12px rgba(0, 255, 136, 0.4);
+}
+
+.btn-neon:hover {
+  background: var(--neon-dim);
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.7);
+  transform: translateY(-1px);
+}
+
+.btn-neon:disabled {
+  background: #1a2e24;
+  color: #4a7c59;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Drop zones */
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.drop-zone:hover,
+.drop-zone.drag-over {
+  border-color: var(--neon);
+  background: rgba(0, 255, 136, 0.04);
+}
+
+/* Range slider */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: #1e1e2e;
+  border-radius: 2px;
+  outline: none;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--neon);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(0, 255, 136, 0.5);
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: var(--neon);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+/* Custom checkbox */
+input[type='checkbox'] {
+  accent-color: var(--neon);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* Progress bar */
+.progress-bar-inner {
+  height: 100%;
+  background: linear-gradient(90deg, var(--neon), #00aaff);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* Card / panel */
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--dark-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--neon-dim);
+}
