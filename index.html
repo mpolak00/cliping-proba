@@ -326,7 +326,7 @@
       <!-- Video -->
       <div>
         <span class="lbl">Video *</span>
-        <div class="drop-zone" id="dz-video" onclick="document.getElementById('inp-video').click()">
+        <div class="drop-zone" id="dz-video">
           <input type="file" id="inp-video" accept="video/*" style="display:none" />
           <i class="fa-solid fa-film" style="font-size:26px;color:var(--muted);display:block;margin-bottom:8px;"></i>
           <p id="lbl-video" style="font-size:12px;color:var(--muted);margin:0;">MP4, MOV, WEBM, MKV<br><span style="font-size:10px;">maks. 500 MB</span></p>
@@ -336,7 +336,7 @@
       <!-- Logo -->
       <div>
         <span class="lbl">Logo PNG (opcionalno)</span>
-        <div class="drop-zone" id="dz-logo" onclick="document.getElementById('inp-logo').click()">
+        <div class="drop-zone" id="dz-logo">
           <input type="file" id="inp-logo" accept="image/*" style="display:none" />
           <i class="fa-solid fa-stamp" style="font-size:26px;color:var(--muted);display:block;margin-bottom:8px;"></i>
           <p id="lbl-logo" style="font-size:12px;color:var(--muted);margin:0;">Logo / watermark<br><span style="font-size:10px;">PNG s alfa kanalom</span></p>
@@ -346,7 +346,7 @@
       <!-- Outro image -->
       <div>
         <span class="lbl">Outro slika (opcionalno)</span>
-        <div class="drop-zone" id="dz-outro" onclick="document.getElementById('inp-outro').click()">
+        <div class="drop-zone" id="dz-outro">
           <input type="file" id="inp-outro" accept="image/*" style="display:none" />
           <i class="fa-solid fa-image" style="font-size:26px;color:var(--muted);display:block;margin-bottom:8px;"></i>
           <p id="lbl-outro" style="font-size:12px;color:var(--muted);margin:0;">Outro pozadinska slika<br><span style="font-size:10px;">PNG / JPG</span></p>
@@ -661,13 +661,20 @@ function setupDropZone(dzId, inputId, labelId, onFile) {
   const inp = document.getElementById(inputId);
   const lbl = document.getElementById(labelId);
 
+  // Click handler on drop zone — opens file dialog
+  dz.addEventListener('click', (e) => {
+    // Prevent double-trigger if click originated on the input itself
+    if (e.target === inp) return;
+    inp.click();
+  });
+
   dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
-  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('dragleave', e => { if (!dz.contains(e.relatedTarget)) dz.classList.remove('drag-over'); });
   dz.addEventListener('drop', e => {
     e.preventDefault();
     dz.classList.remove('drag-over');
     const f = e.dataTransfer.files[0];
-    if (f) { onFile(f, dz, lbl); }
+    if (f) onFile(f, dz, lbl);
   });
   inp.addEventListener('change', () => {
     if (inp.files[0]) onFile(inp.files[0], dz, lbl);
