@@ -845,35 +845,33 @@ function buildFilters(s, hasLogo, hasOutroImg) {
   const filters = [];
 
   // 1. Scale + pad to 1080x1920 (9:16 vertical)
-  filters.push("scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black");
+  filters.push("scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,setsar=1");
 
   // 2. Equalizer: brightness / contrast / saturation
-  filters.push(`eq=brightness=${s.brightness.toFixed(3)}:contrast=${s.contrast.toFixed(3)}:saturation=${s.saturation.toFixed(3)}`);
+  const br = s.brightness.toFixed(3), ct = s.contrast.toFixed(3), sat = s.saturation.toFixed(3);
+  if (Math.abs(s.brightness) > 0.001 || Math.abs(s.contrast - 1) > 0.001 || Math.abs(s.saturation - 1) > 0.001) {
+    filters.push(`eq=brightness=${br}:contrast=${ct}:saturation=${sat}`);
+  }
 
-  // 3. Speed change on video (setpts)
-  if (Math.abs(s.speed - 1.0) > 0.005) {
+  // 3. Speed change on video (setpts) — must come before other time-based filters
+  if (Math.abs(s.speed - 1.0) > 0.01) {
     filters.push(`setpts=${(1/s.speed).toFixed(4)}*PTS`);
   }
 
-  // 4. Zoom / Ken Burns effect using zoompan
-  // zoompan formula: slowly zoom in from 1 to 1+(intensity*0.008)
+  // 4. Zoom — simple static scale+crop (zoompan is too slow for wasm)
   if (s.zoom > 0) {
-    const intensity = s.zoom; // 1-10
-    // z grows each frame by 0.0008 * intensity, capped at 1 + 0.08*(intensity/10)
-    const zMax = (1 + 0.08 * (intensity / 10)).toFixed(4);
-    filters.push(
-      `zoompan=z='min(zoom+0.0008*${intensity},${zMax})':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920`
-    );
+    const factor = (1 + s.zoom * 0.008).toFixed(4); // 0-10 → 1.000-1.080
+    filters.push(`scale=iw*${factor}:ih*${factor},crop=1080:1920`);
   }
 
-  // 5. Film grain (noise)
+  // 5. Film grain (noise) — use simple noise filter
   if (s.grain) {
-    filters.push("noise=alls=12:allf=t+u");
+    filters.push("noise=alls=10:allf=t");
   }
 
-  // 6. Vignette
+  // 6. Vignette — simple darkening at edges via curves
   if (s.vignette) {
-    filters.push("vignette=PI/5");
+    filters.push("vignette=PI/4");
   }
 
   // 7. Horizontal flip
@@ -881,35 +879,49 @@ function buildFilters(s, hasLogo, hasOutroImg) {
     filters.push("hflip");
   }
 
-  // 8. Caption drawtext (manual subtitles) — donja trećina, white + black shadow
+  // 8. Caption drawtext — donja trećina, white + black shadow
   if (s.captionsEnabled && s.captionsText) {
-    // Escape single quotes for FFmpeg drawtext
-    const safe = s.captionsText.replace(/'/g, "\\'").replace(/:/g, "\\:").replace(/\n/g, ' | ');
+    const safe = s.captionsText
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "’")   // replace apostrophe with typographic quote (safe)
+      .replace(/:/g, "\\:")
+      .replace(/\n/g, ' ');
     filters.push(
-      `drawtext=text='${safe}':fontsize=36:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.72:line_spacing=8:box=1:boxcolor=black@0.45:boxborderw=8`
+      `drawtext=text='${safe}':fontsize=34:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.75:box=1:boxcolor=black@0.5:boxborderw=6`
     );
   }
 
-  // 9. URL / branding overlay text
+  // 9. URL / branding text overlay
   if (s.overlayText) {
-    const safeUrl = s.overlayText.replace(/'/g, "\\'").replace(/:/g, "\\:");
+    const safeUrl = s.overlayText
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "’")
+      .replace(/:/g, "\\:");
     const hexColor = s.textColor.startsWith('#') ? s.textColor.slice(1) : s.textColor;
     filters.push(
-      `drawtext=text='${safeUrl}':fontsize=${Math.round(s.fontSize)}:fontcolor=0x${hexColor}:shadowcolor=black@0.8:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h-text_h-48`
+      `drawtext=text='${safeUrl}':fontsize=${Math.round(s.fontSize)}:fontcolor=0x${hexColor}:shadowcolor=black@0.8:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h-text_h-50`
     );
   }
 
-  // Collect video filter string (without logo — logo is overlay handled separately)
   const vfBase = filters.join(',');
 
-  /* ── Logo overlay ── */
-  // Logo input is index 1 if present; we compose as filtergraph
-  let videoFilter, logoLabel = '', voutLabel = '[vbase]';
+  /* ── Audio filter chain ── */
+  const pitchFactor = 1 + (s.pitch / 100);
+  const baseSampleRate = 44100;
+  const newRate = Math.round(baseSampleRate * pitchFactor);
+  const tempoNeeded = s.speed / pitchFactor;
+  const tempoClamp = Math.max(0.5, Math.min(2.0, tempoNeeded));
 
+  const audioParts = [];
+  if (Math.abs(pitchFactor - 1.0) > 0.005) audioParts.push(`asetrate=${newRate}`);
+  if (Math.abs(tempoClamp - 1.0) > 0.005) audioParts.push(`atempo=${tempoClamp.toFixed(4)}`);
+  audioParts.push('aresample=44100,volume=1.5');
+  const audioFilter = audioParts.join(',');
+
+  /* ── Build filter_complex ── */
+  let videoFilter;
   if (hasLogo) {
-    // Logo position calculation
-    const pad = 36;
-    const ls = s.logoSize;
+    const pad = 36, ls = s.logoSize;
     const posMap = {
       BR: `x=W-w-${pad}:y=H-h-${pad}`,
       BL: `x=${pad}:y=H-h-${pad}`,
@@ -918,41 +930,15 @@ function buildFilters(s, hasLogo, hasOutroImg) {
     };
     const pos = posMap[s.logoPosCode] || posMap['BR'];
     const opa = s.logoOpacity.toFixed(2);
-
-    // Full filtergraph string with overlay
+    // Correct alpha: use colorchannelmixer on logo stream, not overlay alpha param
     videoFilter = [
       `[0:v]${vfBase}[vbase]`,
-      `[1:v]scale=${ls}:${ls}:force_original_aspect_ratio=decrease[logosc]`,
-      `[vbase][logosc]overlay=${pos}:alpha=${opa}[vout]`
+      `[1:v]scale=${ls}:${ls}:force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=${opa}[logoa]`,
+      `[vbase][logoa]overlay=${pos}[vout]`
     ].join(';');
   } else {
-    // No logo — simple filtergraph
     videoFilter = `[0:v]${vfBase}[vout]`;
   }
-
-  /* ── Audio filter chain ── */
-  // Pitch shift via asetrate trick + atempo to compensate
-  // asetrate changes sample rate (= pitch), atempo restores speed
-  let audioFilter = '';
-  const speedVal = s.speed;
-  const pitchFactor = 1 + (s.pitch / 100);
-  const baseSampleRate = 44100;
-  const newRate = Math.round(baseSampleRate * pitchFactor);
-  // After asetrate we need atempo = speed * (1/pitchFactor) to keep correct playback speed
-  const tempoNeeded = speedVal / pitchFactor;
-  // atempo is limited to 0.5-2.0 range; clamp
-  const tempoClamp = Math.max(0.5, Math.min(2.0, tempoNeeded));
-
-  const audioParts = [];
-  if (Math.abs(pitchFactor - 1.0) > 0.005) {
-    audioParts.push(`asetrate=${newRate}`);
-  }
-  if (Math.abs(tempoClamp - 1.0) > 0.005) {
-    audioParts.push(`atempo=${tempoClamp.toFixed(4)}`);
-  }
-  audioParts.push('volume=1.5'); // boost audio slightly
-
-  audioFilter = audioParts.join(',');
 
   return { videoFilter, audioFilter };
 }
@@ -1017,19 +1003,19 @@ async function runBrand() {
     // ── Step 5: Process main video ──
     setProgress(18, 'FFmpeg procesira glavni video...');
 
-    // Build ffmpeg args
+    // Build ffmpeg args — audio filter embedded in filter_complex to avoid conflicts
     const mainArgs = ['-i', 'input.mp4'];
     if (hasLogo) mainArgs.push('-i', 'logo.png');
 
-    mainArgs.push(
-      '-filter_complex', videoFilter,
-      '-map', '[vout]',
-    );
+    // Embed audio filter into filter_complex alongside video filter
+    const fullFC = videoFilter.replace('[vout]', '[vout]') +
+      `;[0:a]${audioFilter}[aout]`;
 
-    if (audioFilter) {
-      mainArgs.push('-filter:a', audioFilter);
-    }
-    mainArgs.push('-map', hasLogo ? '0:a?' : '0:a?');
+    mainArgs.push(
+      '-filter_complex', fullFC,
+      '-map', '[vout]',
+      '-map', '[aout]',
+    );
 
     // Output codec flags — ultrafast for client-side performance
     mainArgs.push(
@@ -1087,31 +1073,31 @@ async function runBrand() {
       // Duration = 2 seconds
       outroArgs.push('-t', '2');
 
-      // Build outro filter_complex
+      // Build outro filter_complex — no fade (unstable in wasm), simple overlay
       let outroFC = '';
-      const baseLabel = hasOutroImg ? '[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black' : '[0:v]null';
+      const scaleBg = hasOutroImg
+        ? '[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,setsar=1'
+        : '[0:v]null';
+      const ls = s.logoSize;
+      const logoIdx = 1; // logo is always input index 1 in outro
 
       if (hasLogo && outroText) {
-        const pad = 36; const ls = s.logoSize;
-        const logoIdx = hasOutroImg ? 1 : 1;
         outroFC = [
-          `${baseLabel}[obg]`,
-          `[${logoIdx}:v]scale=${ls}:${ls}:force_original_aspect_ratio=decrease[ologosc]`,
-          `[obg][ologosc]overlay=x=(W-w)/2:y=H/2-${ls/2+60}:alpha=${s.logoOpacity.toFixed(2)}[owithlogo]`,
-          `[owithlogo]drawtext=text='${outroTextSafe}':fontsize=42:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h/2+80,fade=t=in:st=0:d=0.4,fade=t=out:st=1.4:d=0.4[oout]`
+          `${scaleBg}[obg]`,
+          `[${logoIdx}:v]scale=${ls}:${ls}:force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=${s.logoOpacity.toFixed(2)}[ologoa]`,
+          `[obg][ologoa]overlay=x=(W-w)/2:y=(H-h)/2-50[owithlogo]`,
+          `[owithlogo]drawtext=text='${outroTextSafe}':fontsize=40:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2+${ls/2+20}[oout]`
         ].join(';');
       } else if (hasLogo) {
-        const pad = 36; const ls = s.logoSize;
-        const logoIdx = hasOutroImg ? 1 : 1;
         outroFC = [
-          `${baseLabel}[obg]`,
-          `[${logoIdx}:v]scale=${ls}:${ls}:force_original_aspect_ratio=decrease[ologosc]`,
-          `[obg][ologosc]overlay=x=(W-w)/2:y=(H-h)/2:alpha=${s.logoOpacity.toFixed(2)},fade=t=in:st=0:d=0.4,fade=t=out:st=1.4:d=0.4[oout]`
+          `${scaleBg}[obg]`,
+          `[${logoIdx}:v]scale=${ls}:${ls}:force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=${s.logoOpacity.toFixed(2)}[ologoa]`,
+          `[obg][ologoa]overlay=x=(W-w)/2:y=(H-h)/2[oout]`
         ].join(';');
       } else if (outroText) {
-        outroFC = `${baseLabel},drawtext=text='${outroTextSafe}':fontsize=42:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2,fade=t=in:st=0:d=0.4,fade=t=out:st=1.4:d=0.4[oout]`;
+        outroFC = `${scaleBg},drawtext=text='${outroTextSafe}':fontsize=42:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2[oout]`;
       } else {
-        outroFC = `${baseLabel},fade=t=in:st=0:d=0.4,fade=t=out:st=1.4:d=0.4[oout]`;
+        outroFC = `${scaleBg}[oout]`;
       }
 
       outroArgs.push(
@@ -1152,8 +1138,17 @@ async function runBrand() {
       }
     }
 
-    // ── Step 8: Read output ──
+    // ── Step 8: Read output (with existence check) ──
     setProgress(96, 'Čitam output...');
+    // Verify output file exists before reading
+    let outputExists = false;
+    try {
+      const stat = ffmpeg.FS('stat', finalFile);
+      outputExists = stat && stat.size > 0;
+    } catch (e) { outputExists = false; }
+    if (!outputExists) {
+      throw new Error(`FFmpeg nije kreirao output file '${finalFile}'. Pokušaj bez Zoom/Vignette opcija ili s manjim videom.`);
+    }
     outputData = ffmpeg.FS('readFile', finalFile);
     const sizeMB = (outputData.length / 1024 / 1024).toFixed(2);
     log(`Output: ${sizeMB} MB ✓`, 'ok');
