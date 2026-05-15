@@ -442,70 +442,50 @@ function esc(t) {
   return (t || '').replace(/\\/g, '/').replace(/'/g, '').replace(/"/g, '').replace(/:/g, ' ').replace(/[,;[\]]/g, ' ').trim();
 }
 
-// ── Build FFmpeg args ─────────────────────────────────────────────────────
-function buildArgs(s, hasLogo) {
-  // Video filter chain
-  const vf = [
-    'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black'
-  ];
-
+// ── Build video filter string (-vf) ──────────────────────────────────────
+function buildVF(s) {
+  const vf = ['scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black'];
   if (Math.abs(s.speed - 1.0) > 0.02) {
     vf.push('setpts=' + (1 / s.speed).toFixed(4) + '*PTS');
   }
-
   const hasBr  = Math.abs(s.bright) > 0.005;
   const hasCt  = Math.abs(s.contrast - 1) > 0.01;
   const hasSat = Math.abs(s.sat - 1) > 0.01;
   if (hasBr || hasCt || hasSat) {
     vf.push('eq=brightness=' + s.bright.toFixed(3) + ':contrast=' + s.contrast.toFixed(2) + ':saturation=' + s.sat.toFixed(2));
   }
-
-  if (s.grain) vf.push('noise=alls=8:allf=t');
+  if (s.grain) vf.push('noise=alls=8:allf=a');
   if (s.flip)  vf.push('hflip');
-
   const urlText = esc(s.url);
   if (urlText) {
     vf.push("drawtext=text='" + urlText + "':fontsize=34:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h-text_h-50");
   }
+  return vf.join(',');
+}
 
-  const vfStr = vf.join(',');
-
-  // Audio filter
+// ── Build audio filter string (-af) ───────────────────────────────────────
+function buildAF(s) {
   const af = [];
   if (Math.abs(s.speed - 1.0) > 0.02) {
-    const tempo = Math.max(0.5, Math.min(2.0, s.speed));
-    af.push('atempo=' + tempo.toFixed(4));
+    af.push('atempo=' + Math.max(0.5, Math.min(2.0, s.speed)).toFixed(4));
   }
   af.push('volume=1.3');
-  const afStr = af.join(',');
+  return af.join(',');
+}
 
-  // Build final args
-  if (hasLogo) {
-    const pad = 28, ls = s.logoSize;
-    const posMap = {
-      BR: 'W-w-' + pad + ':H-h-' + pad,
-      BL: pad + ':H-h-' + pad,
-      TR: 'W-w-' + pad + ':' + pad,
-      TL: pad + ':' + pad,
-    };
-    const pos = posMap[s.logoPos] || posMap['BR'];
-    const opa = s.logoOp.toFixed(2);
-    const fc = [
-      '[0:v]' + vfStr + '[vb]',
-      '[1:v]scale=' + ls + ':' + ls + ':force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=' + opa + '[lg]',
-      '[vb][lg]overlay=x=' + pos + '[vout]'
-    ].join(';');
-    return { useFC: true, fc, afStr };
-  } else {
-    return { useFC: false, vfStr, afStr };
-  }
+// ── Run ffmpeg.run and verify output exists ───────────────────────────────
+async function runFF(args, outFile) {
+  await ffmpeg.run(...args);
+  try {
+    const d = ffmpeg.FS('readFile', outFile);
+    return d && d.length > 500;
+  } catch { return false; }
 }
 
 // ── MAIN BRAND FUNCTION ───────────────────────────────────────────────────
 async function startBrand() {
   if (!videoFile) { toast('Odaberi video prvo!'); return; }
 
-  // UI state
   currentPct = 0;
   document.getElementById('brand-btn').disabled = true;
   document.getElementById('prog-panel').style.display = '';
@@ -515,7 +495,7 @@ async function startBrand() {
   window.scrollTo({ top: document.getElementById('prog-panel').offsetTop - 20, behavior: 'smooth' });
 
   try {
-    // Step 1: Load FFmpeg
+    // ── Load FFmpeg ──────────────────────────────────────────────────────
     if (!ffmpeg) {
       setProgress(3, 'Učitavam FFmpeg engine...');
       log('Učitavam FFmpeg.wasm (~25MB)...');
@@ -533,7 +513,7 @@ async function startBrand() {
     const s = getSettings();
     const hasLogo = !!logoFile;
 
-    // Step 2: Write files to MEMFS
+    // ── Write inputs to MEMFS ────────────────────────────────────────────
     log('Pišem video u memoriju...');
     ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(videoFile));
     log('Video u memoriji (' + (videoFile.size / 1024 / 1024).toFixed(1) + ' MB).', 'ok');
@@ -543,115 +523,153 @@ async function startBrand() {
       log('Logo u memoriji.', 'ok');
     }
 
-    // Step 3: Build args
-    setProgress(12, 'Gradim filter graf...');
-    const { useFC, fc, vfStr, afStr } = buildArgs(s, hasLogo);
-
-    // Step 4: Run main encode
+    // ── STEP 1: Encode with all video + audio filters (no logo yet) ───────
     setProgress(15, 'Obrađujem video...');
-    log('Pokretam FFmpeg...');
-    startFakeProgress(15, 83, 60000); // animirani progress dok traje encode
+    log('Pokretam FFmpeg (korak 1)...');
+    startFakeProgress(15, hasLogo ? 65 : 83, 90000);
 
-    const mainArgs = ['-i', 'input.mp4'];
-    if (hasLogo) mainArgs.push('-i', 'logo.png');
+    const vfStr = buildVF(s);
+    const afStr = buildAF(s);
 
-    if (useFC) {
-      mainArgs.push('-filter_complex', fc, '-map', '[vout]', '-map', '0:a?');
-    } else {
-      mainArgs.push('-vf', vfStr);
-    }
-
-    mainArgs.push('-af', afStr);
-    mainArgs.push(
+    // Try with drawtext first, retry without if it fails (font might be missing)
+    let step1OK = await runFF([
+      '-i', 'input.mp4',
+      '-vf', vfStr, '-af', afStr,
       '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
       '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k',
-      '-movflags', '+faststart', '-r', '30', '-y', 'main.mp4'
-    );
+      '-movflags', '+faststart', '-r', '30', '-y', 'step1.mp4'
+    ], 'step1.mp4');
 
-    await ffmpeg.run(...mainArgs);
+    if (!step1OK) {
+      // Retry without drawtext
+      log('Retry bez text overlay...', 'warn');
+      const vfNoText = buildVF({ ...s, url: '' });
+      step1OK = await runFF([
+        '-i', 'input.mp4',
+        '-vf', vfNoText, '-af', afStr,
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+        '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k',
+        '-movflags', '+faststart', '-r', '30', '-y', 'step1.mp4'
+      ], 'step1.mp4');
+    }
+
+    if (!step1OK) {
+      // Last resort: bare minimum encode (scale only)
+      log('Retry s minimalnim filterima...', 'warn');
+      step1OK = await runFF([
+        '-i', 'input.mp4',
+        '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black',
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+        '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k',
+        '-movflags', '+faststart', '-r', '30', '-y', 'step1.mp4'
+      ], 'step1.mp4');
+    }
+
+    if (!step1OK) throw new Error('Video encode nije uspio. Provjeri format videa (MP4/MOV/WEBM).');
+
     clearInterval(progInterval);
+    log('Korak 1 gotov.', 'ok');
 
-    // Verify output
-    let mainExists = false;
-    try { const d = ffmpeg.FS('readFile', 'main.mp4'); mainExists = d && d.length > 1000; } catch {}
-    if (!mainExists) throw new Error('FFmpeg nije kreirao output. Provjeri filter postavke.');
-    log('Glavni video obrađen.', 'ok');
+    // ── STEP 2: Logo overlay (if logo) — separate pass, clean syntax ──────
+    let mainFile = 'step1.mp4';
 
-    // Step 5: Outro (optional)
-    let finalFile = 'main.mp4';
+    if (hasLogo) {
+      setProgress(68, 'Dodajem logo...');
+      log('Dodajem logo overlay...');
+      startFakeProgress(68, 83, 20000);
 
-    if (s.outro) {
-      setProgress(86, 'Generiram outro...');
-      log('Generiram outro ekran...');
-      try {
-        const ot = esc(s.outroText);
-        const outroArgs = ['-f', 'lavfi', '-i', 'color=c=black:s=1080x1920:r=30'];
-        if (hasLogo) outroArgs.push('-i', 'logo.png');
-        outroArgs.push('-t', '2');
+      const pad = 28, ls = s.logoSize;
+      const opa = s.logoOp.toFixed(2);
+      const posMap = {
+        BR: 'x=W-w-' + pad + ':y=H-h-' + pad,
+        BL: 'x=' + pad + ':y=H-h-' + pad,
+        TR: 'x=W-w-' + pad + ':y=' + pad,
+        TL: 'x=' + pad + ':y=' + pad,
+      };
+      const overlayXY = posMap[s.logoPos] || posMap['BR'];
 
-        let oVf;
-        if (hasLogo) {
-          const ls = s.logoSize;
-          const opa = s.logoOp.toFixed(2);
-          let ofc = [
-            '[0:v][1:v]null[baz]',
-            '[1:v]scale=' + ls + ':' + ls + ':force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=' + opa + '[lg2]',
-            '[0:v][lg2]overlay=x=(W-w)/2:y=(H-h)/2-40[ovl]'
-          ];
-          if (ot) {
-            ofc.push("[ovl]drawtext=text='" + ot + "':fontsize=38:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2+" + (Math.round(ls / 2) + 16) + "[oout]");
-          } else {
-            ofc[ofc.length - 1] = ofc[ofc.length - 1].replace('[ovl]', '[ovl]').replace('[ovl]', '') + '';
-            // Simplify: rename last output
-            ofc = ofc.map((f, i) => i === ofc.length - 1 ? f.replace('[ovl]', '[ovl]') : f);
-            ofc[ofc.length - 1] = ofc[ofc.length - 1].replace('[ovl]', '[oout]');
-          }
-          outroArgs.push('-filter_complex', ofc.join(';'), '-map', '[oout]');
-        } else if (ot) {
-          outroArgs.push('-vf', "drawtext=text='" + ot + "':fontsize=44:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2");
-        }
+      // Logo filter: scale to max size preserving aspect, add alpha, overlay
+      const logoFC = '[1:v]scale=' + ls + ':-2,format=rgba,colorchannelmixer=aa=' + opa + '[lg];[0:v][lg]overlay=' + overlayXY + '[vo]';
 
-        outroArgs.push('-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-r', '30', '-y', 'outro.mp4');
-        await ffmpeg.run(...outroArgs);
+      const logoOK = await runFF([
+        '-i', 'step1.mp4',
+        '-i', 'logo.png',
+        '-filter_complex', logoFC,
+        '-map', '[vo]', '-map', '0:a?',
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+        '-pix_fmt', 'yuv420p', '-c:a', 'copy',
+        '-movflags', '+faststart', '-r', '30', '-y', 'main.mp4'
+      ], 'main.mp4');
 
-        // Concat
-        setProgress(92, 'Spajam outro...');
-        await ffmpeg.run(
-          '-i', 'main.mp4', '-i', 'outro.mp4',
-          '-filter_complex', '[0:v][1:v]concat=n=2:v=1:a=0[vout]',
-          '-map', '[vout]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
-          '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-r', '30', '-y', 'final.mp4'
-        );
-        finalFile = 'final.mp4';
-        log('Outro spojen.', 'ok');
-      } catch (e) {
-        log('Outro preskočen: ' + e.message, 'warn');
+      clearInterval(progInterval);
+      if (logoOK) {
+        mainFile = 'main.mp4';
+        log('Logo dodan.', 'ok');
+      } else {
+        log('Logo overlay preskočen (nekompatibilni format slike?).', 'warn');
+        mainFile = 'step1.mp4';
       }
     }
 
-    // Step 6: Read output
+    // ── STEP 3: Outro (optional) ──────────────────────────────────────────
+    let finalFile = mainFile;
+
+    if (s.outro) {
+      setProgress(85, 'Generiram outro...');
+      log('Generiram outro ekran...');
+
+      // Simple black screen, 2 seconds
+      const outroOK = await runFF([
+        '-f', 'lavfi', '-i', 'color=c=black:s=1080x1920:r=30',
+        '-t', '2',
+        '-an',
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-r', '30',
+        '-y', 'outro.mp4'
+      ], 'outro.mp4');
+
+      if (outroOK) {
+        setProgress(90, 'Spajam outro...');
+        // Concat: video from both, audio only from main (outro has none)
+        const concatOK = await runFF([
+          '-i', mainFile,
+          '-i', 'outro.mp4',
+          '-filter_complex', '[0:v][1:v]concat=n=2:v=1:a=0[vo]',
+          '-map', '[vo]', '-map', '0:a?',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+          '-pix_fmt', 'yuv420p', '-c:a', 'copy',
+          '-movflags', '+faststart', '-r', '30', '-y', 'final.mp4'
+        ], 'final.mp4');
+
+        if (concatOK) {
+          finalFile = 'final.mp4';
+          log('Outro spojen.', 'ok');
+        } else {
+          log('Concat preskočen.', 'warn');
+        }
+      } else {
+        log('Outro generiranje preskočeno.', 'warn');
+      }
+    }
+
+    // ── Read output ───────────────────────────────────────────────────────
     setProgress(97, 'Čitam output...');
     const data = ffmpeg.FS('readFile', finalFile);
+    if (!data || data.length < 500) throw new Error('Output fajl je prazan ili oštećen.');
+
     outputBlob = new Blob([data.buffer], { type: 'video/mp4' });
     const sizeMB = (data.length / 1024 / 1024).toFixed(2);
     log('Output: ' + sizeMB + ' MB', 'ok');
 
     // Cleanup MEMFS
-    try { ffmpeg.FS('unlink', 'input.mp4'); } catch {}
-    try { ffmpeg.FS('unlink', 'main.mp4'); } catch {}
-    try { ffmpeg.FS('unlink', 'final.mp4'); } catch {}
-    try { if (hasLogo) ffmpeg.FS('unlink', 'logo.png'); } catch {}
-    try { ffmpeg.FS('unlink', 'outro.mp4'); } catch {}
+    ['input.mp4','step1.mp4','main.mp4','final.mp4','logo.png','outro.mp4'].forEach(f => {
+      try { ffmpeg.FS('unlink', f); } catch {}
+    });
 
-    // Done
     setProgress(100, 'Gotovo!');
     log('Sve gotovo!', 'ok');
     document.getElementById('dl-info').textContent = 'Veličina: ' + sizeMB + ' MB • Format: MP4 1080×1920 (9:16)';
     document.getElementById('dl-panel').style.display = '';
-    setTimeout(() => {
-      document.getElementById('prog-panel').style.display = 'none';
-    }, 1500);
+    setTimeout(() => { document.getElementById('prog-panel').style.display = 'none'; }, 1500);
     window.scrollTo({ top: document.getElementById('dl-panel').offsetTop - 20, behavior: 'smooth' });
     toast('Video je spreman za download!');
 
