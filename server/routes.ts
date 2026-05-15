@@ -225,7 +225,7 @@ router.get('/status/:jobId', async (req: Request, res: Response) => {
 // ──────────────────────────────────────────
 // GET /api/progress/:jobId  (SSE)
 // ──────────────────────────────────────────
-router.get('/progress/:jobId', (req: Request, res: Response) => {
+router.get('/progress/:jobId', async (req: Request, res: Response) => {
   const { jobId } = req.params;
 
   res.setHeader('Content-Type', 'text/event-stream');
@@ -233,6 +233,19 @@ router.get('/progress/:jobId', (req: Request, res: Response) => {
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
+
+  // If job already finished, send final state immediately and close
+  const existingJob = await getJob(jobId);
+  if (existingJob?.status === 'done') {
+    res.write(`data: ${JSON.stringify({ progress: 100, done: true })}\n\n`);
+    res.end();
+    return;
+  }
+  if (existingJob?.status === 'error') {
+    res.write(`data: ${JSON.stringify({ error: existingJob.errorMessage ?? 'Greška' })}\n\n`);
+    res.end();
+    return;
+  }
 
   // Send current progress if already started
   const current = progressMap.get(jobId) ?? 0;
@@ -283,12 +296,12 @@ router.get('/download/:jobId', async (req: Request, res: Response) => {
   stream.pipe(res);
 
   stream.on('end', () => {
-    // Cleanup after download
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
         if (job.outputPath) fs.unlinkSync(job.outputPath);
         if (job.inputPath) fs.unlinkSync(job.inputPath);
       } catch {}
+      await updateJob(jobId, { outputPath: null });
       progressMap.delete(jobId);
     }, 5000);
   });

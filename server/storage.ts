@@ -39,7 +39,9 @@ function saveToDisk(): void {
     for (const [id, job] of jobs.entries()) {
       obj[id] = job;
     }
-    fs.writeFileSync(JOBS_FILE, JSON.stringify(obj), 'utf-8');
+    const tmp = JOBS_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(obj), 'utf-8');
+    fs.renameSync(tmp, JOBS_FILE);
   } catch (e) {
     console.warn('[storage] Could not persist jobs:', e);
   }
@@ -88,4 +90,4 @@ export async function cleanupOldJobs(): Promise<void> {
   saveToDisk();
 }
 
-setInterval(() => cleanupOldJobs().catch(console.error), 60 * 60 * 1000);
+setInterval(() => cleanupOldJobs().catch(console.error), 60 * 60 * 1000).unref();

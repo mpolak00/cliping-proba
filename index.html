@@ -437,18 +437,20 @@ function dismissResume() {
   document.getElementById('resume-panel').style.display = 'none';
 }
 
+// checkSavedJob se poziva odmah, neovisno o warmup rezultatu
+checkSavedJob();
+
 // Warm up server on page load — prevents 30s delay on first Brand It click
+let warmupAttempts = 0;
 (function warmup() {
-  const API = 'https://cliping-proba.onrender.com';
-  fetch(API + '/api/health', { method: 'GET', mode: 'cors' })
+  warmupAttempts++;
+  fetch(API_URL + '/api/health', { method: 'GET', mode: 'cors' })
     .then(() => {
       document.getElementById('ffmpeg-status').textContent = 'Server spreman';
-      checkSavedJob();
     })
     .catch(() => {
-      // Server sleeping — will wake on first request
       document.getElementById('ffmpeg-status').textContent = 'Server se budi...';
-      setTimeout(warmup, 30000); // retry after 30s
+      if (warmupAttempts < 10) setTimeout(warmup, 30000);
     });
 })();
 
@@ -644,12 +646,14 @@ async function startBrand() {
       let settled = false;
       let pollTimer = null;
       let globalTimer = null;
+      let sse = null;
 
       function done() {
         if (settled) return;
         settled = true;
         clearInterval(pollTimer);
         clearTimeout(globalTimer);
+        if (sse) { sse.close(); sse = null; }
         resolve();
       }
       function fail(msg) {
@@ -657,15 +661,14 @@ async function startBrand() {
         settled = true;
         clearInterval(pollTimer);
         clearTimeout(globalTimer);
+        if (sse) { sse.close(); sse = null; }
         reject(new Error(msg));
       }
 
-      // Globalni timeout — ako nije gotovo za 6 minuta, odustaj
       globalTimer = setTimeout(() => {
         fail('Obrada traje predugo — server možda nije dostupan. Pokušaj ponovo.');
       }, 6 * 60 * 1000);
 
-      // Fetch s manual timeoutom (kompatibilno sa starim Safari)
       function fetchWithTimeout(url, ms) {
         return new Promise((res, rej) => {
           const t = setTimeout(() => rej(new Error('timeout')), ms);
@@ -673,7 +676,6 @@ async function startBrand() {
         });
       }
 
-      // Polling — svakih 5s, broji uzastopne greške
       let pollFails = 0;
       pollTimer = setInterval(async () => {
         if (settled) return;
@@ -691,18 +693,17 @@ async function startBrand() {
         }
       }, 5000);
 
-      const sse = new EventSource(API_URL + '/api/progress/' + jobId);
+      sse = new EventSource(API_URL + '/api/progress/' + jobId);
       sse.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
-          if (data.progress != null) setProgress(Math.max(currentPct, 30 + Math.round(data.progress * 0.6)));
-          if (data.done || data.progress >= 100) { sse.close(); done(); }
-          if (data.error) { sse.close(); fail(data.error); }
+          if (data.progress != null) setProgress(Math.max(currentPct, Math.round(data.progress)));
+          if (data.done || data.progress >= 100) { done(); }
+          if (data.error) { fail(data.error); }
         } catch {}
       };
       sse.onerror = () => {
-        sse.close();
-        // SSE pala — polling preuzima
+        if (sse) { sse.close(); sse = null; }
       };
     });
 
@@ -736,13 +737,19 @@ async function startBrand() {
 document.getElementById('dl-btn').addEventListener('click', function () {
   if (!outputJobId) { toast('Nema videa. Pokreni Brand It prvo.'); return; }
   localStorage.removeItem('brander_jobId');
-  window.location.href = API_URL + '/api/download/' + outputJobId;
+  const a = document.createElement('a');
+  a.href = API_URL + '/api/download/' + outputJobId;
+  a.download = 'peptidhr_branded.mp4';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 });
 
 // ── Reset ─────────────────────────────────────────────────────────────────
 function resetApp() {
   videoFile = null; logoFile = null; outroFile = null; outputJobId = null;
   localStorage.removeItem('brander_jobId');
+  clearInterval(progInterval); progInterval = null;
   currentPct = 0;
   document.getElementById('dl-panel').style.display = 'none';
   document.getElementById('prog-panel').style.display = 'none';
