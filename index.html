@@ -643,34 +643,51 @@ async function startBrand() {
     await new Promise((resolve, reject) => {
       let settled = false;
       let pollTimer = null;
+      let globalTimer = null;
 
       function done() {
         if (settled) return;
         settled = true;
         clearInterval(pollTimer);
+        clearTimeout(globalTimer);
         resolve();
       }
       function fail(msg) {
         if (settled) return;
         settled = true;
         clearInterval(pollTimer);
+        clearTimeout(globalTimer);
         reject(new Error(msg));
       }
 
-      // Polling fallback — provjeri status svakih 5s, odustaj nakon 12 neuspjeha (60s)
+      // Globalni timeout — ako nije gotovo za 6 minuta, odustaj
+      globalTimer = setTimeout(() => {
+        fail('Obrada traje predugo — server možda nije dostupan. Pokušaj ponovo.');
+      }, 6 * 60 * 1000);
+
+      // Fetch s manual timeoutom (kompatibilno sa starim Safari)
+      function fetchWithTimeout(url, ms) {
+        return new Promise((res, rej) => {
+          const t = setTimeout(() => rej(new Error('timeout')), ms);
+          fetch(url).then(r => { clearTimeout(t); res(r); }).catch(e => { clearTimeout(t); rej(e); });
+        });
+      }
+
+      // Polling — svakih 5s, broji uzastopne greške
       let pollFails = 0;
       pollTimer = setInterval(async () => {
         if (settled) return;
         try {
-          const r = await fetch(API_URL + '/api/status/' + jobId, { signal: AbortSignal.timeout(8000) });
+          const r = await fetchWithTimeout(API_URL + '/api/status/' + jobId, 8000);
           pollFails = 0;
-          if (!r.ok) { pollFails++; return; }
+          if (!r.ok) return;
           const d = await r.json();
           if (d.status === 'done' && d.hasOutput) { done(); }
           else if (d.status === 'error') { fail(d.errorMessage || 'FFmpeg greška'); }
         } catch {
           pollFails++;
-          if (pollFails >= 12) { fail('Server nedostupan — pokušaj ponovo za koji trenutak'); }
+          log('Server ne odgovara (' + pollFails + '/8)...', 'warn');
+          if (pollFails >= 8) { fail('Server nedostupan — pokušaj ponovo za koji trenutak'); }
         }
       }, 5000);
 
