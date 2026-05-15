@@ -273,7 +273,23 @@ select{background:#09090b;border:1px solid var(--border);color:var(--text);borde
     </details>
   </div>
 
-  <!-- 4. BRAND IT -->
+  <!-- 4. NASTAVI PRETHODNI JOB -->
+  <div class="card" id="resume-panel" style="display:none;border-color:#f59e0b">
+    <div class="card-title" style="color:#f59e0b"><i class="fa-solid fa-clock-rotate-left"></i> Prethodni video čeka!</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Tvoj branded video je spreman za preuzimanje.</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;word-break:break-all">
+      Job ID: <span id="resume-jobid" style="color:var(--accent);font-family:monospace"></span>
+    </div>
+    <button class="dl-btn" id="resume-dl-btn">
+      <i class="fa-solid fa-download"></i>
+      Preuzmi prethodni video
+    </button>
+    <button onclick="dismissResume()" style="display:block;width:100%;margin-top:10px;padding:10px;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;cursor:pointer;font-size:13px;-webkit-tap-highlight-color:transparent">
+      ✕ Zatvori
+    </button>
+  </div>
+
+  <!-- 5. BRAND IT -->
   <button class="brand-btn" id="brand-btn" onclick="startBrand()">
     <i class="fa-solid fa-wand-magic-sparkles"></i>
     Brand It!
@@ -379,12 +395,40 @@ function setupUploads() {
 }
 setupUploads();
 
+// ── Resume previous job ───────────────────────────────────────────────────
+async function checkSavedJob() {
+  const savedId = localStorage.getItem('brander_jobId');
+  if (!savedId) return;
+  try {
+    const res = await fetch(API_URL + '/api/status/' + savedId);
+    if (!res.ok) { localStorage.removeItem('brander_jobId'); return; }
+    const data = await res.json();
+    if (data.status === 'done' && data.hasOutput) {
+      document.getElementById('resume-jobid').textContent = savedId;
+      document.getElementById('resume-panel').style.display = '';
+      document.getElementById('resume-dl-btn').onclick = function () {
+        localStorage.removeItem('brander_jobId');
+        document.getElementById('resume-panel').style.display = 'none';
+        window.location.href = API_URL + '/api/download/' + savedId;
+      };
+    } else {
+      localStorage.removeItem('brander_jobId');
+    }
+  } catch {}
+}
+
+function dismissResume() {
+  localStorage.removeItem('brander_jobId');
+  document.getElementById('resume-panel').style.display = 'none';
+}
+
 // Warm up server on page load — prevents 30s delay on first Brand It click
 (function warmup() {
   const API = 'https://cliping-proba.onrender.com';
   fetch(API + '/api/health', { method: 'GET', mode: 'cors' })
     .then(() => {
       document.getElementById('ffmpeg-status').textContent = 'Server spreman';
+      checkSavedJob();
     })
     .catch(() => {
       // Server sleeping — will wake on first request
@@ -572,6 +616,7 @@ async function startBrand() {
     if (processErr) throw new Error(processErr);
 
     outputJobId = jobId;
+    localStorage.setItem('brander_jobId', jobId);
     log('Obrada pokrenuta. JobID: ' + jobId.slice(0,8) + '...', 'ok');
 
     // ── KORAK 3: Praćenje progresa via SSE ───────────────────────────────
@@ -630,12 +675,14 @@ async function startBrand() {
 // ── Download ──────────────────────────────────────────────────────────────
 document.getElementById('dl-btn').addEventListener('click', function () {
   if (!outputJobId) { toast('Nema videa. Pokreni Brand It prvo.'); return; }
+  localStorage.removeItem('brander_jobId');
   window.location.href = API_URL + '/api/download/' + outputJobId;
 });
 
 // ── Reset ─────────────────────────────────────────────────────────────────
 function resetApp() {
-  videoFile = null; logoFile = null; outroFile = null; outputBlob = null;
+  videoFile = null; logoFile = null; outroFile = null; outputJobId = null;
+  localStorage.removeItem('brander_jobId');
   currentPct = 0;
   document.getElementById('dl-panel').style.display = 'none';
   document.getElementById('prog-panel').style.display = 'none';

@@ -207,6 +207,22 @@ router.post('/process', async (req: Request, res: Response) => {
 });
 
 // ──────────────────────────────────────────
+// GET /api/status/:jobId  (simple poll)
+// ──────────────────────────────────────────
+router.get('/status/:jobId', async (req: Request, res: Response) => {
+  const job = await getJob(req.params.jobId);
+  if (!job) {
+    res.status(404).json({ error: 'Job not found or expired' });
+    return;
+  }
+  res.json({
+    status: job.status,
+    errorMessage: job.errorMessage ?? null,
+    hasOutput: !!(job.outputPath && fs.existsSync(job.outputPath)),
+  });
+});
+
+// ──────────────────────────────────────────
 // GET /api/progress/:jobId  (SSE)
 // ──────────────────────────────────────────
 router.get('/progress/:jobId', (req: Request, res: Response) => {
