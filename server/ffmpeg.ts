@@ -272,7 +272,7 @@ export function processVideo(options: ProcessOptions): Promise<void> {
       .outputOptions([
         '-c:v libx264',
         '-crf 23',
-        '-preset medium',
+        '-preset ultrafast',
         '-c:a aac',
         '-b:a 128k',
         '-movflags +faststart',

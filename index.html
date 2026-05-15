@@ -125,7 +125,7 @@ select{background:#09090b;border:1px solid var(--border);color:var(--text);borde
   </div>
   <div class="hdr-status">
     <div class="dot"></div>
-    <span id="ffmpeg-status">Spreman</span>
+    <span id="ffmpeg-status">Spajam...</span>
   </div>
 </div>
 
@@ -378,6 +378,20 @@ function setupUploads() {
   });
 }
 setupUploads();
+
+// Warm up server on page load — prevents 30s delay on first Brand It click
+(function warmup() {
+  const API = 'https://cliping-proba.onrender.com';
+  fetch(API + '/api/health', { method: 'GET', mode: 'cors' })
+    .then(() => {
+      document.getElementById('ffmpeg-status').textContent = 'Server spreman';
+    })
+    .catch(() => {
+      // Server sleeping — will wake on first request
+      document.getElementById('ffmpeg-status').textContent = 'Server se budi...';
+      setTimeout(warmup, 30000); // retry after 30s
+    });
+})();
 
 // ── Presets ───────────────────────────────────────────────────────────────
 const PRESETS = {
