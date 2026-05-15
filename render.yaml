@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: peptidhr-brander-api
+    runtime: node
+    buildCommand: npm install
+    startCommand: npx tsx server/index.ts
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ALLOWED_ORIGIN
+        value: https://cliping-proba.vercel.app
