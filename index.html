@@ -319,8 +319,8 @@ select{background:#09090b;border:1px solid var(--border);color:var(--text);borde
 <!-- TOAST -->
 <div class="toast" id="toast" style="opacity:0"></div>
 
-<!-- FFmpeg.wasm 0.11.6 single-threaded (radi na iOS Safari bez COOP/COEP) -->
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+<!-- FFmpeg.wasm 0.11.6 single-threaded — jsdelivr (pravilni CORS + WASM MIME type) -->
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <script>
 'use strict';
 
@@ -330,16 +330,6 @@ let ffmpeg = null;
 let outputBlob = null;
 let progInterval = null;
 const { createFFmpeg, fetchFile } = FFmpeg;
-
-// ── WebAssembly support check ─────────────────────────────────────────────
-if (typeof WebAssembly === 'undefined' || typeof WebAssembly.instantiate !== 'function') {
-  document.addEventListener('DOMContentLoaded', function () {
-    var btn = document.getElementById('brand-btn');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-ban"></i> WebAssembly nije podržan'; }
-    var st = document.getElementById('ffmpeg-status');
-    if (st) st.textContent = 'Nije podržano';
-  });
-}
 
 // ── Slider value display ──────────────────────────────────────────────────
 function sv(id, val) {
@@ -525,7 +515,7 @@ async function startBrand() {
       log('Učitavam FFmpeg.wasm (~25MB)...');
       document.getElementById('ffmpeg-status').textContent = 'Učitavam...';
       ffmpeg = createFFmpeg({
-        corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.0/dist/ffmpeg-core.js',
+        corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.0/dist/ffmpeg-core.js',
         log: false
       });
       await ffmpeg.load();
