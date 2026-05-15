@@ -39,7 +39,7 @@ export async function getJob(id: string): Promise<Job | undefined> {
 }
 
 export async function cleanupOldJobs(): Promise<void> {
-  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - 10 * 24 * 60 * 60 * 1000; // 10 dana
   for (const [id, job] of jobs.entries()) {
     if (job.createdAt && job.createdAt.getTime() < cutoff) {
       if (job.inputPath)  try { fs.unlinkSync(job.inputPath);  } catch {}

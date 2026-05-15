@@ -162,108 +162,72 @@ export function processVideo(options: ProcessOptions): Promise<void> {
 
     // Logo overlay (complex filtergraph)
     if (options.logoPath && fs.existsSync(options.logoPath)) {
-      const pos = buildLogoPosition(options.logoPosition, options.logoSize);
-      const logoFilter =
-        `[1:v]scale=${options.logoSize}:${options.logoSize},` +
-        `format=rgba,colorchannelmixer=aa=${options.logoOpacity.toFixed(2)}[logo];` +
-        `[0:v]${vfFilters.join(',')}[main];` +
-        `[main][logo]overlay=${pos}[out]`;
-      // We need to redo with complex filtergraph for logo compositing
-      // Reset and use complexFilter
+      // Reset and build a full complexFilter chain — no 'copy' placeholders
       cmd = ffmpeg(options.inputPath)
-        .input(options.logoPath)
-        .complexFilter([
-          {
-            filter: 'scale',
-            options: `w=1080:h=1920:force_original_aspect_ratio=increase`,
-            inputs: ['0:v'],
-            outputs: ['scaled'],
-          },
-          {
-            filter: 'crop',
-            options: '1080:1920',
-            inputs: ['scaled'],
-            outputs: ['cropped'],
-          },
-          {
-            filter: 'eq',
-            options: eq,
-            inputs: ['cropped'],
-            outputs: ['equalised'],
-          },
-          ...(options.addGrain
-            ? [
-                {
-                  filter: 'noise',
-                  options: 'c0s=8:c0f=t+u',
-                  inputs: ['equalised'],
-                  outputs: ['grained'],
-                },
-              ]
-            : [{ filter: 'copy', inputs: ['equalised'], outputs: ['grained'] }]),
-          ...(options.addVignette
-            ? [
-                {
-                  filter: 'vignette',
-                  options: 'PI/4',
-                  inputs: ['grained'],
-                  outputs: ['vignetted'],
-                },
-              ]
-            : [{ filter: 'copy', inputs: ['grained'], outputs: ['vignetted'] }]),
-          ...(options.addFlip
-            ? [
-                {
-                  filter: 'hflip',
-                  inputs: ['vignetted'],
-                  outputs: ['flipped'],
-                },
-              ]
-            : [{ filter: 'copy', inputs: ['vignetted'], outputs: ['flipped'] }]),
-          ...(options.overlayText && options.overlayText.trim()
-            ? [
-                {
-                  filter: 'drawtext',
-                  options: {
-                    text: options.overlayText.replace(/'/g, "\\'"),
-                    fontcolor: `0x${(options.textColor.startsWith('#') ? options.textColor.slice(1) : options.textColor)}`,
-                    fontsize: String(options.fontSize),
-                    x: '(w-text_w)/2',
-                    y: `h-text_h-60`,
-                    shadowcolor: 'black',
-                    shadowx: '2',
-                    shadowy: '2',
-                  },
-                  inputs: ['flipped'],
-                  outputs: ['texted'],
-                },
-              ]
-            : [{ filter: 'copy', inputs: ['flipped'], outputs: ['texted'] }]),
-          {
-            filter: 'scale',
-            options: `${options.logoSize}:${options.logoSize}`,
-            inputs: ['1:v'],
-            outputs: ['logo_scaled'],
-          },
-          {
-            filter: 'format',
-            options: 'rgba',
-            inputs: ['logo_scaled'],
-            outputs: ['logo_rgba'],
-          },
-          {
-            filter: 'colorchannelmixer',
-            options: `aa=${options.logoOpacity.toFixed(2)}`,
-            inputs: ['logo_rgba'],
-            outputs: ['logo_alpha'],
-          },
-          {
-            filter: 'overlay',
-            options: pos,
-            inputs: ['texted', 'logo_alpha'],
-            outputs: ['out'],
-          },
-        ])
+        .input(options.logoPath);
+
+      // Build filter chain dynamically (no 'copy' placeholders)
+      const cf: ffmpeg.FilterSpecification[] = [];
+      let cur = '0:v';
+      let idx = 0;
+      const nl = () => `v${idx++}`;
+
+      // Scale + crop to 9:16
+      const s1 = nl();
+      cf.push({ filter: 'scale', options: 'w=1080:h=1920:force_original_aspect_ratio=increase', inputs: [cur], outputs: [s1] });
+      const s2 = nl();
+      cf.push({ filter: 'crop', options: '1080:1920', inputs: [s1], outputs: [s2] });
+      cur = s2;
+
+      // Color eq
+      const s3 = nl();
+      cf.push({ filter: 'eq', options: eq, inputs: [cur], outputs: [s3] });
+      cur = s3;
+
+      // Grain
+      if (options.addGrain) {
+        const s4 = nl();
+        cf.push({ filter: 'noise', options: 'c0s=8:c0f=t+u', inputs: [cur], outputs: [s4] });
+        cur = s4;
+      }
+
+      // Vignette
+      if (options.addVignette) {
+        const s5 = nl();
+        cf.push({ filter: 'vignette', options: 'PI/4', inputs: [cur], outputs: [s5] });
+        cur = s5;
+      }
+
+      // Flip
+      if (options.addFlip) {
+        const s6 = nl();
+        cf.push({ filter: 'hflip', inputs: [cur], outputs: [s6] });
+        cur = s6;
+      }
+
+      // Drawtext
+      if (options.overlayText && options.overlayText.trim().length > 0) {
+        const safeText = options.overlayText.replace(/['"\\:]/g, ' ').trim();
+        const color = options.textColor.startsWith('#') ? options.textColor.slice(1) : options.textColor;
+        const s7 = nl();
+        cf.push({
+          filter: 'drawtext',
+          options: `text='${safeText}':fontcolor=0x${color}:fontsize=${options.fontSize}:x=(w-text_w)/2:y=h-text_h-60:shadowcolor=black:shadowx=2:shadowy=2`,
+          inputs: [cur],
+          outputs: [s7],
+        });
+        cur = s7;
+      }
+
+      // Logo: scale, rgba, alpha, overlay
+      const pos = buildLogoPosition(options.logoPosition, options.logoSize);
+      cf.push({ filter: 'scale', options: `${options.logoSize}:-2`, inputs: ['1:v'], outputs: ['ls'] });
+      cf.push({ filter: 'format', options: 'rgba', inputs: ['ls'], outputs: ['lr'] });
+      cf.push({ filter: 'colorchannelmixer', options: `aa=${options.logoOpacity.toFixed(2)}`, inputs: ['lr'], outputs: ['la'] });
+      cf.push({ filter: 'overlay', options: pos, inputs: [cur, 'la'], outputs: ['out'] });
+
+      cmd = cmd
+        .complexFilter(cf)
         .map('[out]')
         .audioFilter(afFilters);
     }
@@ -359,7 +323,7 @@ export function appendOutro(
         });
       } else {
         complexFilters.push({
-          filter: 'copy',
+          filter: 'null',
           inputs: ['bg_with_img'],
           outputs: ['outro'],
         });
@@ -383,7 +347,7 @@ export function appendOutro(
         });
       } else {
         complexFilters.push({
-          filter: 'copy',
+          filter: 'null',
           inputs: ['0:v'],
           outputs: ['outro'],
         });
