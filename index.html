@@ -1,1214 +1,705 @@
 <!DOCTYPE html>
-<html lang="hr" class="dark">
+<html lang="hr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PeptidiHR Video Brander v4.3</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>PeptidiHR Video Brander</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+:root{--bg:#09090b;--card:#18181b;--border:#3f3f46;--accent:#22c55e;--accent2:#16a34a;--text:#fff;--muted:#71717a;--red:#ef4444}
+body{background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:40px}
 
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            green: { 500: '#22c55e', 400: '#4ade80', 600: '#16a34a' }
-          }
-        }
-      }
-    };
-  </script>
+/* HEADER */
+.hdr{background:#111;border-bottom:1px solid var(--border);padding:14px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
+.hdr-icon{width:40px;height:40px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#000;flex-shrink:0;box-shadow:0 0 20px #22c55e55}
+.hdr-title{font-size:20px;font-weight:800;color:var(--accent);letter-spacing:-0.5px}
+.hdr-sub{font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
+.hdr-status{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
-  <!-- Font Awesome -->
-  <link rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
-    crossorigin="anonymous" />
+/* LAYOUT */
+.wrap{max-width:560px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:14px}
+.card-title{font-size:13px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;display:flex;align-items:center;gap:8px}
 
-  <style>
-    /* ─── CSS Variables ─── */
-    :root {
-      --bg:      #09090b;
-      --card:    #111113;
-      --border:  #27272a;
-      --accent:  #22c55e;
-      --accent2: #16a34a;
-      --text:    #e4e4e7;
-      --muted:   #71717a;
-    }
-    *, *::before, *::after { box-sizing: border-box; }
+/* UPLOAD BUTTONS — jedini pouzdani pattern za iOS+Android+Desktop */
+.upload-label{
+  display:block;
+  position:relative;
+  border:2px dashed var(--border);
+  border-radius:12px;
+  padding:20px 16px;
+  text-align:center;
+  cursor:pointer;
+  transition:all 0.2s;
+  margin-bottom:10px;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;
+}
+.upload-label:hover,.upload-label:active{border-color:var(--accent);background:rgba(34,197,94,0.05)}
+.upload-label.has-file{border-color:var(--accent);border-style:solid;background:rgba(34,197,94,0.07)}
+.upload-label input[type=file]{
+  position:absolute;
+  top:0;left:0;
+  width:100%;height:100%;
+  opacity:0;
+  cursor:pointer;
+  font-size:0;
+  -webkit-appearance:none;
+}
+.upload-icon{font-size:28px;margin-bottom:8px}
+.upload-name{font-size:14px;font-weight:600;color:var(--text);margin-bottom:3px}
+.upload-hint{font-size:11px;color:var(--muted)}
 
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
-      margin: 0;
-      min-height: 100vh;
-      font-size: 14px;
-    }
+/* PRESETS */
+.preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.preset-btn{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 8px;text-align:center;cursor:pointer;font-size:12px;color:var(--text);transition:all 0.15s;font-weight:600}
+.preset-btn:hover,.preset-btn:active{border-color:var(--accent);color:var(--accent);background:rgba(34,197,94,0.05)}
 
-    /* ─── Accent button ─── */
-    .btn-accent {
-      background: var(--accent);
-      color: #000;
-      font-weight: 700;
-      border: none;
-      cursor: pointer;
-      border-radius: 10px;
-      transition: background 0.18s, box-shadow 0.18s, transform 0.12s;
-      box-shadow: 0 0 16px rgba(34,197,94,0.35);
-    }
-    .btn-accent:hover:not(:disabled) {
-      background: var(--accent2);
-      box-shadow: 0 0 28px rgba(34,197,94,0.55);
-      transform: translateY(-1px);
-    }
-    .btn-accent:disabled {
-      background: #1a2e22;
-      color: #3f6647;
-      box-shadow: none;
-      cursor: not-allowed;
-      transform: none;
-    }
+/* SETTINGS */
+details summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:4px 0;color:var(--muted);font-size:13px;font-weight:600;-webkit-tap-highlight-color:transparent}
+details summary::-webkit-details-marker{display:none}
+details summary .chev{transition:transform 0.2s;font-size:11px}
+details[open] summary .chev{transform:rotate(180deg)}
+details .inner{padding-top:14px;display:flex;flex-direction:column;gap:14px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.row label{font-size:13px;color:var(--muted);flex-shrink:0}
+.row span{font-size:12px;color:var(--accent);font-weight:700;min-width:36px;text-align:right}
+input[type=range]{-webkit-appearance:none;appearance:none;height:4px;background:#27272a;border-radius:2px;outline:none;cursor:pointer;flex:1}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid #000}
+input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+input[type=text]{background:#09090b;border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:13px;width:100%;outline:none}
+input[type=text]:focus{border-color:var(--accent)}
+select{background:#09090b;border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:13px;outline:none;cursor:pointer}
+.sep{height:1px;background:var(--border);margin:4px 0}
 
-    /* ─── Ghost button (presets) ─── */
-    .btn-ghost {
-      background: var(--card);
-      border: 1px solid var(--border);
-      color: var(--text);
-      font-weight: 600;
-      cursor: pointer;
-      border-radius: 10px;
-      transition: border-color 0.18s, background 0.18s;
-      padding: 10px 14px;
-      font-size: 13px;
-      text-align: left;
-      width: 100%;
-    }
-    .btn-ghost:hover {
-      border-color: var(--accent);
-      background: rgba(34,197,94,0.07);
-    }
+/* BRAND IT */
+.brand-btn{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  width:100%;padding:18px;
+  background:var(--accent);color:#000;
+  font-size:18px;font-weight:800;
+  border:none;border-radius:14px;cursor:pointer;
+  transition:all 0.15s;
+  box-shadow:0 0 30px #22c55e44;
+  -webkit-tap-highlight-color:transparent;
+  margin-bottom:14px;
+}
+.brand-btn:hover{background:#16a34a}
+.brand-btn:active{transform:scale(0.98)}
+.brand-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
 
-    /* ─── Panels ─── */
-    .panel {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 20px;
-    }
-    .panel-title {
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--accent);
-      margin: 0 0 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+/* PROGRESS */
+.prog-bar-wrap{height:8px;background:#27272a;border-radius:4px;overflow:hidden;margin:12px 0}
+.prog-bar-fill{height:100%;background:var(--accent);border-radius:4px;transition:width 0.4s ease;background:linear-gradient(90deg,#22c55e,#4ade80)}
+.log-box{font-family:monospace;font-size:11px;color:var(--muted);max-height:120px;overflow-y:auto;margin-top:8px;space-y:4px}
+.log-ok{color:var(--accent)}
+.log-err{color:var(--red)}
+.log-warn{color:#f59e0b}
 
-    /* ─── Drop zones ─── */
-    .drop-zone {
-      display: block;
-      border: 2px dashed var(--border);
-      border-radius: 10px;
-      padding: 28px 16px;
-      text-align: center;
-      cursor: pointer;
-      transition: border-color 0.18s, background 0.18s;
-    }
-    .drop-zone:hover, .drop-zone.drag-over {
-      border-color: var(--accent);
-      background: rgba(34,197,94,0.05);
-    }
-    .drop-zone.has-file {
-      border-color: var(--accent);
-      border-style: solid;
-      background: rgba(34,197,94,0.06);
-    }
+/* DOWNLOAD */
+.dl-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;background:#1f2937;color:var(--text);font-size:15px;font-weight:700;border:2px solid var(--accent);border-radius:12px;cursor:pointer;transition:all 0.15s;-webkit-tap-highlight-color:transparent}
+.dl-btn:hover,.dl-btn:active{background:rgba(34,197,94,0.1)}
 
-    /* ─── Range inputs ─── */
-    input[type='range'] {
-      -webkit-appearance: none;
-      appearance: none;
-      height: 4px;
-      background: #27272a;
-      border-radius: 2px;
-      outline: none;
-      width: 100%;
-      cursor: pointer;
-    }
-    input[type='range']::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 16px; height: 16px;
-      background: var(--accent);
-      border-radius: 50%;
-      cursor: pointer;
-      box-shadow: 0 0 6px rgba(34,197,94,0.5);
-    }
-    input[type='range']::-moz-range-thumb {
-      width: 16px; height: 16px;
-      background: var(--accent);
-      border-radius: 50%;
-      cursor: pointer;
-      border: none;
-    }
-
-    /* ─── Checkbox ─── */
-    input[type='checkbox'] {
-      accent-color: var(--accent);
-      width: 16px; height: 16px;
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    /* ─── Form elements ─── */
-    .lbl {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 5px;
-      display: block;
-    }
-    .inp {
-      background: #0c0c0e;
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 8px;
-      padding: 8px 10px;
-      width: 100%;
-      font-size: 13px;
-      outline: none;
-      transition: border-color 0.18s;
-    }
-    .inp:focus { border-color: var(--accent); }
-    select.inp { cursor: pointer; }
-    textarea.inp { resize: vertical; min-height: 72px; font-family: inherit; }
-
-    /* ─── Accordion (details/summary) ─── */
-    details.accordion {
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      overflow: hidden;
-    }
-    details.accordion summary {
-      background: var(--card);
-      padding: 13px 16px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 13px;
-      list-style: none;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      user-select: none;
-    }
-    details.accordion summary::-webkit-details-marker { display: none; }
-    details.accordion summary .chevron {
-      margin-left: auto;
-      transition: transform 0.22s;
-      color: var(--muted);
-      font-size: 12px;
-    }
-    details.accordion[open] summary .chevron { transform: rotate(180deg); }
-    details.accordion .acc-body {
-      background: #0c0c0e;
-      border-top: 1px solid var(--border);
-      padding: 16px;
-    }
-
-    /* ─── Progress ─── */
-    .progress-wrap {
-      height: 8px;
-      background: #1a1a1c;
-      border-radius: 4px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-    }
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent), #4ade80);
-      border-radius: 4px;
-      transition: width 0.35s ease;
-      width: 0%;
-    }
-
-    /* ─── Log ─── */
-    #log-box {
-      background: #0c0c0e;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px 12px;
-      font-size: 11px;
-      font-family: ui-monospace, monospace;
-      color: #a1a1aa;
-      max-height: 160px;
-      overflow-y: auto;
-      line-height: 1.6;
-    }
-    #log-box .log-ok   { color: var(--accent); }
-    #log-box .log-err  { color: #f87171; }
-    #log-box .log-warn { color: #fbbf24; }
-
-    /* ─── Scrollbar ─── */
-    ::-webkit-scrollbar { width: 5px; }
-    ::-webkit-scrollbar-track { background: var(--bg); }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--accent2); }
-
-    /* ─── Alert toast ─── */
-    #toast {
-      position: fixed;
-      top: 16px; right: 16px;
-      z-index: 9999;
-      padding: 12px 18px;
-      border-radius: 10px;
-      font-size: 13px;
-      font-weight: 600;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-      transition: opacity 0.3s;
-      opacity: 0;
-      pointer-events: none;
-    }
-    #toast.show { opacity: 1; pointer-events: auto; }
-    #toast.ok   { background: #14532d; color: #86efac; border: 1px solid #15803d; }
-    #toast.err  { background: #450a0a; color: #fca5a5; border: 1px solid #b91c1c; }
-    #toast.warn { background: #422006; color: #fcd34d; border: 1px solid #92400e; }
-
-    /* ─── Brand-It button ─── */
-    #brand-btn {
-      font-size: 18px;
-      padding: 18px;
-      letter-spacing: 0.04em;
-      width: 100%;
-    }
-  </style>
+/* TOAST */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1f2937;border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:10px;font-size:13px;z-index:999;max-width:90vw;text-align:center;transition:opacity 0.3s;pointer-events:none}
+</style>
 </head>
-
 <body>
-<!-- ════════════════════════════════════════════════════════════
-     TOAST
-════════════════════════════════════════════════════════════ -->
-<div id="toast"></div>
 
-<!-- ════════════════════════════════════════════════════════════
-     HEADER
-════════════════════════════════════════════════════════════ -->
-<header style="background:var(--card);border-bottom:1px solid var(--border);">
-  <div class="max-w-3xl mx-auto px-5 py-4 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <div style="width:34px;height:34px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;">
-        <i class="fa-solid fa-video" style="color:#000;font-size:15px;"></i>
-      </div>
-      <div>
-        <h1 style="font-size:17px;font-weight:800;color:var(--accent);margin:0;line-height:1;">PeptidiHR</h1>
-        <p style="font-size:10px;color:var(--muted);margin:0;letter-spacing:0.12em;text-transform:uppercase;">Video Brander v4.3 — Client-Side</p>
-      </div>
-    </div>
-    <div style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;">
-      <span style="width:7px;height:7px;background:var(--accent);border-radius:50%;display:inline-block;box-shadow:0 0 6px rgba(34,197,94,0.6);"></span>
-      FFmpeg.wasm ready
-    </div>
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-icon"><i class="fa-solid fa-video"></i></div>
+  <div>
+    <div class="hdr-title">PeptidiHR</div>
+    <div class="hdr-sub">Video Brander</div>
   </div>
-</header>
+  <div class="hdr-status">
+    <div class="dot"></div>
+    <span id="ffmpeg-status">Spreman</span>
+  </div>
+</div>
 
-<!-- ════════════════════════════════════════════════════════════
-     MAIN — single column, max-w-3xl
-════════════════════════════════════════════════════════════ -->
-<main class="max-w-3xl mx-auto px-4 py-8 space-y-5">
+<div class="wrap">
 
-  <!-- ── 1. UPLOAD ───────────────────────────────────────── -->
-  <div class="panel">
-    <p class="panel-title"><i class="fa-solid fa-cloud-arrow-up"></i> Upload</p>
-    <div class="grid grid-cols-1 gap-4" style="grid-template-columns: 1fr 1fr 1fr;">
+  <!-- 1. UPLOAD -->
+  <div class="card">
+    <div class="card-title"><i class="fa-solid fa-upload"></i> Upload fajlova</div>
 
-      <!-- Video -->
-      <div>
-        <span class="lbl">Video *</span>
-        <label class="drop-zone" id="dz-video" for="inp-video">
-          <input type="file" id="inp-video" accept="video/*" style="display:none" />
-          <i class="fa-solid fa-film" style="font-size:26px;color:var(--muted);display:block;margin-bottom:8px;"></i>
-          <p id="lbl-video" style="font-size:12px;color:var(--muted);margin:0;">MP4, MOV, WEBM, MKV<br><span style="font-size:10px;">maks. 500 MB</span></p>
-        </label>
-      </div>
+    <!-- VIDEO — LABEL s inputom unutra (radi na iOS/Android/Desktop) -->
+    <label class="upload-label" id="lbl-video-wrap">
+      <input type="file" id="inp-video" accept="video/mp4,video/quicktime,video/webm,video/*">
+      <div class="upload-icon">🎬</div>
+      <div class="upload-name">Odaberi video</div>
+      <div class="upload-hint" id="lbl-video">MP4, MOV, WEBM &bull; max 500MB</div>
+    </label>
 
-      <!-- Logo -->
-      <div>
-        <span class="lbl">Logo PNG (opcionalno)</span>
-        <label class="drop-zone" id="dz-logo" for="inp-logo">
-          <input type="file" id="inp-logo" accept="image/*" style="display:none" />
-          <i class="fa-solid fa-stamp" style="font-size:26px;color:var(--muted);display:block;margin-bottom:8px;"></i>
-          <p id="lbl-logo" style="font-size:12px;color:var(--muted);margin:0;">Logo / watermark<br><span style="font-size:10px;">PNG s alfa kanalom</span></p>
-        </label>
-      </div>
+    <!-- LOGO -->
+    <label class="upload-label" id="lbl-logo-wrap">
+      <input type="file" id="inp-logo" accept="image/png,image/jpeg,image/webp,image/*">
+      <div class="upload-icon">🏷️</div>
+      <div class="upload-name">Odaberi logo (opcionalno)</div>
+      <div class="upload-hint" id="lbl-logo">PNG s providnom pozadinom</div>
+    </label>
 
-      <!-- Outro image -->
-      <div>
-        <span class="lbl">Outro slika (opcionalno)</span>
-        <label class="drop-zone" id="dz-outro" for="inp-outro">
-          <input type="file" id="inp-outro" accept="image/*" style="display:none" />
-          <i class="fa-solid fa-image" style="font-size:26px;color:var(--muted);display:block;margin-bottom:8px;"></i>
-          <p id="lbl-outro" style="font-size:12px;color:var(--muted);margin:0;">Outro pozadinska slika<br><span style="font-size:10px;">PNG / JPG</span></p>
-        </label>
-      </div>
+    <!-- OUTRO -->
+    <label class="upload-label" id="lbl-outro-wrap" style="margin-bottom:0">
+      <input type="file" id="inp-outro" accept="image/png,image/jpeg,image/webp,image/*">
+      <div class="upload-icon">🖼️</div>
+      <div class="upload-name">Outro slika (opcionalno)</div>
+      <div class="upload-hint" id="lbl-outro">Pozadina za 2s outro ekran</div>
+    </label>
+  </div>
+
+  <!-- 2. BRZI PRESETS -->
+  <div class="card">
+    <div class="card-title"><i class="fa-solid fa-wand-magic-sparkles"></i> Brzi presets</div>
+    <div class="preset-grid">
+      <div class="preset-btn" onclick="applyPreset('hype')">⚡ Hype Mode</div>
+      <div class="preset-btn" onclick="applyPreset('moody')">🌑 Dark Moody</div>
+      <div class="preset-btn" onclick="applyPreset('clean')">✨ Clean Viral</div>
+      <div class="preset-btn" onclick="applyPreset('cinematic')">🎬 Cinematic</div>
+      <div class="preset-btn" onclick="applyPreset('tiktok')" style="grid-column:1/-1">🔥 TikTok Fast</div>
     </div>
   </div>
 
-  <!-- ── 2. QUICK PRESETS ───────────────────────────────── -->
-  <div class="panel">
-    <p class="panel-title"><i class="fa-solid fa-wand-magic-sparkles"></i> AI Suggest — Quick Presets</p>
-    <div class="grid gap-2" style="grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));">
-      <button class="btn-ghost" onclick="applyPreset('hype')">⚡ Hype Mode</button>
-      <button class="btn-ghost" onclick="applyPreset('dark')">🌑 Dark Moody</button>
-      <button class="btn-ghost" onclick="applyPreset('clean')">✨ Clean Viral</button>
-      <button class="btn-ghost" onclick="applyPreset('cinema')">🎬 Cinematic</button>
-      <button class="btn-ghost" onclick="applyPreset('tiktok')">🔥 TikTok Fast</button>
-    </div>
-  </div>
+  <!-- 3. NAPREDNE POSTAVKE -->
+  <div class="card">
+    <details>
+      <summary>
+        <span><i class="fa-solid fa-sliders" style="color:var(--accent);margin-right:8px"></i>Napredne postavke</span>
+        <i class="fa-solid fa-chevron-down chev"></i>
+      </summary>
+      <div class="inner">
 
-  <!-- ── 3. SETTINGS ACCORDION ─────────────────────────── -->
-
-  <!-- Speed & Pitch -->
-  <details class="accordion" open>
-    <summary>
-      <i class="fa-solid fa-music" style="color:var(--accent);"></i>
-      Speed &amp; Pitch
-      <i class="fa-solid fa-chevron-down chevron"></i>
-    </summary>
-    <div class="acc-body space-y-4">
-      <div>
-        <label class="lbl">Brzina videa: <span id="v-speed">1.00x</span></label>
-        <input type="range" id="speed" min="0.8" max="1.4" value="1.0" step="0.01"
-          oninput="document.getElementById('v-speed').textContent=parseFloat(this.value).toFixed(2)+'x'" />
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px;">
-          <span>0.8x</span><span>1.0x</span><span>1.4x</span>
+        <!-- Speed -->
+        <div class="row">
+          <label>Brzina videa</label>
+          <input type="range" id="s-speed" min="0.8" max="1.4" step="0.05" value="1.05" oninput="sv('speed',this.value+'x')">
+          <span id="v-speed">1.05x</span>
         </div>
-      </div>
-      <div>
-        <label class="lbl">Pitch Shift: <span id="v-pitch">0%</span></label>
-        <input type="range" id="pitch" min="-15" max="15" value="0" step="1"
-          oninput="document.getElementById('v-pitch').textContent=(this.value>0?'+':'')+this.value+'%'" />
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px;">
-          <span>-15%</span><span>0</span><span>+15%</span>
-        </div>
-      </div>
-    </div>
-  </details>
 
-  <!-- Video Filters -->
-  <details class="accordion" open>
-    <summary>
-      <i class="fa-solid fa-sliders" style="color:var(--accent);"></i>
-      Video Filteri (anti-duplicate)
-      <i class="fa-solid fa-chevron-down chevron"></i>
-    </summary>
-    <div class="acc-body space-y-4">
-      <div>
-        <label class="lbl">Svjetlina: <span id="v-bright">0.00</span></label>
-        <input type="range" id="brightness" min="-0.5" max="0.5" value="0" step="0.01"
-          oninput="document.getElementById('v-bright').textContent=parseFloat(this.value).toFixed(2)" />
-      </div>
-      <div>
-        <label class="lbl">Kontrast: <span id="v-contrast">1.00</span></label>
-        <input type="range" id="contrast" min="0.5" max="2.0" value="1.0" step="0.05"
-          oninput="document.getElementById('v-contrast').textContent=parseFloat(this.value).toFixed(2)" />
-      </div>
-      <div>
-        <label class="lbl">Zasićenost: <span id="v-sat">1.00</span></label>
-        <input type="range" id="saturation" min="0" max="3.0" value="1.0" step="0.05"
-          oninput="document.getElementById('v-sat').textContent=parseFloat(this.value).toFixed(2)" />
-      </div>
-      <div>
-        <label class="lbl">Zoom / Ken Burns: <span id="v-zoom">0</span></label>
-        <input type="range" id="zoom" min="0" max="10" value="0" step="1"
-          oninput="document.getElementById('v-zoom').textContent=this.value" />
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px;">
-          <span>0 (off)</span><span>5</span><span>10 (max)</span>
+        <!-- Brightness -->
+        <div class="row">
+          <label>Svjetlina</label>
+          <input type="range" id="s-bright" min="-0.2" max="0.2" step="0.01" value="0" oninput="sv('bright',this.value)">
+          <span id="v-bright">0</span>
         </div>
-      </div>
-      <div class="grid grid-cols-3 gap-3" style="margin-top:4px;">
-        <label style="display:flex;align-items:center;gap:8px;background:#0c0c0e;border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;font-size:12px;">
-          <input type="checkbox" id="grain" /> Film Grain
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;background:#0c0c0e;border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;font-size:12px;">
-          <input type="checkbox" id="vignette" /> Vignette
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;background:#0c0c0e;border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;font-size:12px;">
-          <input type="checkbox" id="flip" /> H-Flip
-        </label>
-      </div>
-    </div>
-  </details>
 
-  <!-- Text Overlay -->
-  <details class="accordion">
-    <summary>
-      <i class="fa-solid fa-font" style="color:var(--accent);"></i>
-      Text Overlay (URL / branding)
-      <i class="fa-solid fa-chevron-down chevron"></i>
-    </summary>
-    <div class="acc-body space-y-3">
-      <div>
-        <label class="lbl">Tekst (ostaviti prazno = bez teksta)</label>
-        <input type="text" id="overlay-text" class="inp"
-          placeholder="@peptidihr • peptidihr.com"
-          value="@peptidihr • peptidihr.com" />
-      </div>
-      <div class="grid grid-cols-2 gap-3">
+        <!-- Contrast -->
+        <div class="row">
+          <label>Kontrast</label>
+          <input type="range" id="s-contrast" min="0.8" max="1.5" step="0.05" value="1.0" oninput="sv('contrast',this.value)">
+          <span id="v-contrast">1.0</span>
+        </div>
+
+        <!-- Saturation -->
+        <div class="row">
+          <label>Zasićenost</label>
+          <input type="range" id="s-sat" min="0.5" max="2.0" step="0.05" value="1.0" oninput="sv('sat',this.value)">
+          <span id="v-sat">1.0</span>
+        </div>
+
+        <div class="sep"></div>
+
+        <!-- Grain -->
+        <div class="row">
+          <label>Film grain (anti-detect)</label>
+          <input type="checkbox" id="s-grain">
+        </div>
+
+        <!-- Flip -->
+        <div class="row">
+          <label>Horizontalni flip</label>
+          <input type="checkbox" id="s-flip">
+        </div>
+
+        <div class="sep"></div>
+
+        <!-- URL overlay -->
         <div>
-          <label class="lbl">Veličina fonta: <span id="v-fsize">36px</span></label>
-          <input type="range" id="font-size" min="16" max="80" value="36" step="2"
-            oninput="document.getElementById('v-fsize').textContent=this.value+'px'" />
+          <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">Tekst overlay (URL/branding)</label>
+          <input type="text" id="s-url" value="peptidihr.com" placeholder="npr. peptidihr.com">
         </div>
-        <div>
-          <label class="lbl">Boja teksta</label>
-          <input type="color" id="text-color" value="#22c55e"
-            style="width:100%;height:36px;border:1px solid var(--border);border-radius:8px;background:var(--card);cursor:pointer;padding:2px;" />
-        </div>
-      </div>
-    </div>
-  </details>
 
-  <!-- Logo Settings -->
-  <details class="accordion">
-    <summary>
-      <i class="fa-solid fa-image" style="color:var(--accent);"></i>
-      Logo Postavke
-      <i class="fa-solid fa-chevron-down chevron"></i>
-    </summary>
-    <div class="acc-body space-y-3">
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="lbl">Pozicija</label>
-          <select id="logo-pos" class="inp">
-            <option value="BR">Dolje desno (default)</option>
-            <option value="BL">Dolje lijevo</option>
-            <option value="TR">Gore desno</option>
-            <option value="TL">Gore lijevo</option>
+        <!-- Logo position -->
+        <div class="row">
+          <label>Pozicija loga</label>
+          <select id="s-logopos">
+            <option value="BR">Donji desni</option>
+            <option value="BL">Donji lijevi</option>
+            <option value="TR">Gornji desni</option>
+            <option value="TL">Gornji lijevi</option>
           </select>
         </div>
-        <div>
-          <label class="lbl">Veličina: <span id="v-lsize">120px</span></label>
-          <input type="range" id="logo-size" min="40" max="300" value="120" step="10"
-            oninput="document.getElementById('v-lsize').textContent=this.value+'px'" />
+
+        <!-- Logo size -->
+        <div class="row">
+          <label>Veličina loga</label>
+          <input type="range" id="s-logosize" min="60" max="220" step="10" value="120" oninput="sv('logosize',this.value+'px')">
+          <span id="v-logosize">120px</span>
         </div>
-      </div>
-      <div>
-        <label class="lbl">Opacity: <span id="v-lopa">80%</span></label>
-        <input type="range" id="logo-opacity" min="0" max="1" value="0.8" step="0.05"
-          oninput="document.getElementById('v-lopa').textContent=Math.round(this.value*100)+'%'" />
-      </div>
-    </div>
-  </details>
 
-  <!-- Outro Settings -->
-  <details class="accordion">
-    <summary>
-      <i class="fa-solid fa-stop-circle" style="color:var(--accent);"></i>
-      Outro (2 sekunde završni ekran)
-      <i class="fa-solid fa-chevron-down chevron"></i>
-    </summary>
-    <div class="acc-body space-y-3">
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
-        <input type="checkbox" id="outro-enabled" />
-        Dodaj outro ekran na kraj videa
-      </label>
-      <div>
-        <label class="lbl">Outro tekst</label>
-        <input type="text" id="outro-text" class="inp"
-          placeholder="Peptidi HR — pratite nas!"
-          value="Peptidi HR — pratite nas!" />
-      </div>
-    </div>
-  </details>
-
-  <!-- Captions -->
-  <details class="accordion">
-    <summary>
-      <i class="fa-solid fa-closed-captioning" style="color:var(--accent);"></i>
-      Captions / Subtitli (manualni)
-      <i class="fa-solid fa-chevron-down chevron"></i>
-    </summary>
-    <div class="acc-body space-y-3">
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
-        <input type="checkbox" id="captions-enabled" />
-        Dodaj caption tekst na video
-      </label>
-      <div>
-        <label class="lbl">Caption tekst (prikazuje se kroz cijeli video u donjoj trećini)</label>
-        <textarea id="captions-text" class="inp"
-          placeholder="Npr: Peptidi za oporavak mišića ✅&#10;Dostava širom Hrvatske 🚀"></textarea>
-      </div>
-      <p style="font-size:11px;color:var(--muted);">
-        <i class="fa-solid fa-circle-info"></i>
-        Napomena: Client-side brander koristi statički drawtext caption. Za dinamičke subtitle s transkriptom potreban je server s Whisper AI.
-      </p>
-    </div>
-  </details>
-
-  <!-- Auto-vary -->
-  <details class="accordion">
-    <summary>
-      <i class="fa-solid fa-shuffle" style="color:var(--accent);"></i>
-      Auto-Vary (anti-detect randomizacija)
-      <i class="fa-solid fa-chevron-down chevron"></i>
-    </summary>
-    <div class="acc-body">
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
-        <input type="checkbox" id="auto-vary" checked />
-        <div>
-          <strong>Auto-vary uključen</strong> — svaki export dobiva male nasumične varijacije:
-          brightness ±0.03, saturation ±0.08, pitch ±2%, speed ±0.03
+        <!-- Logo opacity -->
+        <div class="row">
+          <label>Opacity loga</label>
+          <input type="range" id="s-logoop" min="0.2" max="1.0" step="0.05" value="0.85" oninput="sv('logoop',Math.round(this.value*100)+'%')">
+          <span id="v-logoop">85%</span>
         </div>
-      </label>
-    </div>
-  </details>
 
-  <!-- ── 4. BRAND IT ────────────────────────────────────── -->
-  <button id="brand-btn" class="btn-accent">
-    <i class="fa-solid fa-rocket" style="margin-right:10px;"></i>Brand It!
+        <div class="sep"></div>
+
+        <!-- Outro -->
+        <div class="row">
+          <label>Dodaj outro (2 sek.)</label>
+          <input type="checkbox" id="s-outro" checked>
+        </div>
+
+        <div>
+          <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">Outro tekst</label>
+          <input type="text" id="s-outro-text" value="peptidihr.com" placeholder="Tekst na outro ekranu">
+        </div>
+
+      </div>
+    </details>
+  </div>
+
+  <!-- 4. BRAND IT -->
+  <button class="brand-btn" id="brand-btn" onclick="startBrand()">
+    <i class="fa-solid fa-wand-magic-sparkles"></i>
+    Brand It!
   </button>
 
-  <!-- ── 5. PROGRESS + LOG ──────────────────────────────── -->
-  <div id="progress-panel" class="panel" style="display:none;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-      <span style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;">
-        <i class="fa-solid fa-spinner fa-spin" style="color:var(--accent);"></i>
-        <span id="status-text">Inicijalizacija...</span>
+  <!-- 5. PROGRESS -->
+  <div class="card" id="prog-panel" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <span style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px">
+        <i class="fa-solid fa-spinner fa-spin" style="color:var(--accent)"></i>
+        <span id="prog-label">Inicijalizacija...</span>
       </span>
-      <span id="progress-pct" style="font-size:13px;font-weight:700;color:var(--accent);">0%</span>
+      <span id="prog-pct" style="font-size:14px;font-weight:800;color:var(--accent)">0%</span>
     </div>
-    <div class="progress-wrap" style="margin-bottom:14px;">
-      <div id="progress-bar" class="progress-fill"></div>
+    <div class="prog-bar-wrap">
+      <div class="prog-bar-fill" id="prog-bar" style="width:0%"></div>
     </div>
-    <div id="log-box"></div>
+    <div class="log-box" id="log-box"></div>
   </div>
 
-  <!-- ── 6. DOWNLOAD ────────────────────────────────────── -->
-  <div id="download-panel" class="panel" style="display:none;text-align:center;padding:32px;">
-    <i class="fa-solid fa-circle-check" style="font-size:52px;color:var(--accent);display:block;margin-bottom:16px;"></i>
-    <h2 style="font-size:20px;font-weight:800;margin:0 0 6px;">Video spreman! 🎉</h2>
-    <p style="font-size:13px;color:var(--muted);margin:0 0 22px;">Branded video je obrađen. Klikni za preuzimanje.</p>
-    <button id="download-btn" class="btn-accent" style="padding:14px 36px;font-size:16px;">
-      <i class="fa-solid fa-download" style="margin-right:8px;"></i>Preuzmi video
+  <!-- 6. DOWNLOAD -->
+  <div class="card" id="dl-panel" style="display:none">
+    <div class="card-title"><i class="fa-solid fa-check-circle"></i> Video spreman!</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px" id="dl-info">—</div>
+    <button class="dl-btn" id="dl-btn">
+      <i class="fa-solid fa-download"></i>
+      Preuzmi branded video
     </button>
-    <p style="font-size:11px;color:var(--muted);margin-top:12px;" id="dl-filename"></p>
+    <button onclick="resetApp()" style="display:block;width:100%;margin-top:10px;padding:10px;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;cursor:pointer;font-size:13px;-webkit-tap-highlight-color:transparent">
+      ↩ Obradi drugi video
+    </button>
   </div>
 
-</main>
+</div>
 
-<!-- Footer -->
-<footer style="border-top:1px solid var(--border);padding:18px;text-align:center;margin-top:20px;">
-  <p style="font-size:11px;color:#3f3f46;margin:0;">
-    PeptidiHR Video Brander v4.3 &mdash; 100% Client-Side &bull; FFmpeg.wasm &bull; No server needed
-  </p>
-</footer>
+<!-- TOAST -->
+<div class="toast" id="toast" style="opacity:0"></div>
 
-<!-- ════════════════════════════════════════════════════════════
-     JAVASCRIPT — all inline, no external .js files
-════════════════════════════════════════════════════════════ -->
+<!-- FFmpeg.wasm 0.11.6 -->
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <script>
-/* ─────────────────────────────────────────────────────────────
-   GLOBALS
-───────────────────────────────────────────────────────────── */
-let ffmpegLoaded = false;
-let ffmpeg = null;         // FFmpeg instance
-let videoFile  = null;     // File objects
-let logoFile   = null;
-let outroFile  = null;
-let outputData = null;     // Uint8Array of final MP4
-let outputName = '';
+'use strict';
 
-/* ─────────────────────────────────────────────────────────────
-   TOAST HELPER
-───────────────────────────────────────────────────────────── */
-function toast(msg, type = 'ok', dur = 3500) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = 'show ' + type;
-  clearTimeout(el._t);
-  el._t = setTimeout(() => { el.className = ''; }, dur);
+// ── Globals ──────────────────────────────────────────────────────────────
+let videoFile = null, logoFile = null, outroFile = null;
+let ffmpeg = null;
+let outputBlob = null;
+let progInterval = null;
+const { createFFmpeg, fetchFile } = FFmpeg;
+
+// ── Slider value display ──────────────────────────────────────────────────
+function sv(id, val) {
+  document.getElementById('v-' + id).textContent = val;
 }
 
-/* ─────────────────────────────────────────────────────────────
-   LOG HELPER
-───────────────────────────────────────────────────────────── */
-function log(msg, cls = '') {
+// ── Toast ─────────────────────────────────────────────────────────────────
+function toast(msg, dur = 3000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.opacity = '1';
+  setTimeout(() => t.style.opacity = '0', dur);
+}
+
+// ── Upload setup ──────────────────────────────────────────────────────────
+function setupUploads() {
+  // Video
+  document.getElementById('inp-video').addEventListener('change', function () {
+    const f = this.files[0];
+    if (!f) return;
+    if (f.size > 500 * 1024 * 1024) { toast('Video je veći od 500MB!'); return; }
+    videoFile = f;
+    document.getElementById('lbl-video').textContent =
+      '✓ ' + f.name + ' (' + (f.size / 1024 / 1024).toFixed(1) + ' MB)';
+    document.getElementById('lbl-video-wrap').classList.add('has-file');
+    toast('Video učitan: ' + f.name);
+  });
+
+  // Logo
+  document.getElementById('inp-logo').addEventListener('change', function () {
+    const f = this.files[0];
+    if (!f) return;
+    logoFile = f;
+    document.getElementById('lbl-logo').textContent = '✓ ' + f.name;
+    document.getElementById('lbl-logo-wrap').classList.add('has-file');
+    toast('Logo učitan.');
+  });
+
+  // Outro
+  document.getElementById('inp-outro').addEventListener('change', function () {
+    const f = this.files[0];
+    if (!f) return;
+    outroFile = f;
+    document.getElementById('lbl-outro').textContent = '✓ ' + f.name;
+    document.getElementById('lbl-outro-wrap').classList.add('has-file');
+    toast('Outro slika učitana.');
+  });
+}
+setupUploads();
+
+// ── Presets ───────────────────────────────────────────────────────────────
+const PRESETS = {
+  hype:      { speed: 1.15, bright: 0.03,  contrast: 1.05, sat: 1.25, grain: true,  flip: false },
+  moody:     { speed: 0.92, bright: -0.05, contrast: 1.15, sat: 0.90, grain: true,  flip: false },
+  clean:     { speed: 1.05, bright: 0.02,  contrast: 1.05, sat: 1.10, grain: false, flip: false },
+  cinematic: { speed: 0.95, bright: 0.02,  contrast: 1.20, sat: 0.95, grain: true,  flip: false },
+  tiktok:    { speed: 1.22, bright: 0.04,  contrast: 1.08, sat: 1.30, grain: true,  flip: true  },
+};
+
+function applyPreset(name) {
+  const p = PRESETS[name];
+  if (!p) return;
+  document.getElementById('s-speed').value    = p.speed;
+  document.getElementById('s-bright').value   = p.bright;
+  document.getElementById('s-contrast').value = p.contrast;
+  document.getElementById('s-sat').value      = p.sat;
+  document.getElementById('s-grain').checked  = p.grain;
+  document.getElementById('s-flip').checked   = p.flip;
+  sv('speed',    p.speed + 'x');
+  sv('bright',   p.bright);
+  sv('contrast', p.contrast);
+  sv('sat',      p.sat);
+  toast('Preset primijenjen: ' + name);
+}
+
+// ── Progress helpers ──────────────────────────────────────────────────────
+let currentPct = 0;
+
+function setProgress(pct, label) {
+  currentPct = Math.max(currentPct, pct);
+  document.getElementById('prog-bar').style.width = currentPct + '%';
+  document.getElementById('prog-pct').textContent = currentPct + '%';
+  if (label) document.getElementById('prog-label').textContent = label;
+}
+
+function log(msg, type = '') {
   const box = document.getElementById('log-box');
   const line = document.createElement('div');
-  if (cls) line.className = 'log-' + cls;
-  line.textContent = '> ' + msg;
+  line.className = type ? 'log-' + type : '';
+  line.textContent = '› ' + msg;
   box.appendChild(line);
   box.scrollTop = box.scrollHeight;
 }
 
-/* ─────────────────────────────────────────────────────────────
-   PROGRESS HELPER
-───────────────────────────────────────────────────────────── */
-function setProgress(pct, status) {
-  document.getElementById('progress-bar').style.width = pct + '%';
-  document.getElementById('progress-pct').textContent = pct + '%';
-  if (status) document.getElementById('status-text').textContent = status;
+function startFakeProgress(from, to, durationMs) {
+  clearInterval(progInterval);
+  const step = (to - from) / (durationMs / 600);
+  progInterval = setInterval(() => {
+    if (currentPct >= to) { clearInterval(progInterval); return; }
+    setProgress(Math.min(to, currentPct + step));
+  }, 600);
 }
 
-/* ─────────────────────────────────────────────────────────────
-   DROP ZONE SETUP
-   Generic drag & drop for file inputs
-───────────────────────────────────────────────────────────── */
-function setupDropZone(dzId, inputId, labelId, onFile) {
-  const dz  = document.getElementById(dzId);
-  const inp = document.getElementById(inputId);
-  const lbl = document.getElementById(labelId);
-
-  // No JS click() needed — input is overlaid directly on drop zone (opacity:0, inset:0)
-  // Native tap/click hits the input directly — works on iOS Safari + Android Chrome
-
-  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
-  dz.addEventListener('dragleave', e => { if (!dz.contains(e.relatedTarget)) dz.classList.remove('drag-over'); });
-  dz.addEventListener('drop', e => {
-    e.preventDefault();
-    dz.classList.remove('drag-over');
-    const f = e.dataTransfer.files[0];
-    if (f) onFile(f, dz, lbl);
-  });
-  inp.addEventListener('change', () => {
-    if (inp.files[0]) onFile(inp.files[0], dz, lbl);
-  });
-}
-
-function fileAccepted(f, dz, lbl, maxMB) {
-  if (maxMB && f.size > maxMB * 1024 * 1024) {
-    toast(`Fajl je prevelik! Maks. ${maxMB} MB`, 'err');
-    return false;
-  }
-  dz.classList.add('has-file');
-  lbl.innerHTML = `<i class="fa-solid fa-check" style="color:var(--accent);"></i> ${f.name}<br><span style="font-size:10px;color:var(--muted);">${(f.size/1024/1024).toFixed(1)} MB</span>`;
-  return true;
-}
-
-setupDropZone('dz-video', 'inp-video', 'lbl-video', (f, dz, lbl) => {
-  if (!fileAccepted(f, dz, lbl, 500)) return;
-  videoFile = f;
-  toast('Video učitan: ' + f.name);
-});
-setupDropZone('dz-logo', 'inp-logo', 'lbl-logo', (f, dz, lbl) => {
-  if (!fileAccepted(f, dz, lbl, 50)) return;
-  logoFile = f;
-  toast('Logo učitan: ' + f.name);
-});
-setupDropZone('dz-outro', 'inp-outro', 'lbl-outro', (f, dz, lbl) => {
-  if (!fileAccepted(f, dz, lbl, 30)) return;
-  outroFile = f;
-  toast('Outro slika učitana: ' + f.name);
-});
-
-/* ─────────────────────────────────────────────────────────────
-   PRESETS
-   Each preset applies values to all relevant sliders/checkboxes
-───────────────────────────────────────────────────────────── */
-const PRESETS = {
-  hype:   { speed: 1.15, pitch:  8, brightness: 0,     contrast: 1.0,  saturation: 1.25, grain: true,  vignette: false, flip: false, zoom: 6 },
-  dark:   { speed: 0.92, pitch: -6, brightness: -0.05, contrast: 1.15, saturation: 1.0,  grain: false, vignette: true,  flip: false, zoom: 3 },
-  clean:  { speed: 1.05, pitch:  4, brightness: 0,     contrast: 1.0,  saturation: 1.10, grain: false, vignette: false, flip: false, zoom: 4 },
-  cinema: { speed: 0.95, pitch:  0, brightness: 0.02,  contrast: 1.20, saturation: 1.0,  grain: true,  vignette: true,  flip: false, zoom: 5 },
-  tiktok: { speed: 1.22, pitch: 10, brightness: 0,     contrast: 1.0,  saturation: 1.30, grain: true,  vignette: false, flip: true,  zoom: 7 },
-};
-
-function applyPreset(key) {
-  const p = PRESETS[key];
-  if (!p) return;
-
-  // Helper to set a range and update its label
-  function setRange(id, val, labelId, fmt) {
-    const el = document.getElementById(id);
-    el.value = val;
-    if (labelId) {
-      const lbl = document.getElementById(labelId);
-      if (lbl) lbl.textContent = fmt ? fmt(val) : val;
-    }
-  }
-
-  setRange('speed',      p.speed,      'v-speed', v => parseFloat(v).toFixed(2) + 'x');
-  setRange('pitch',      p.pitch,      'v-pitch',  v => (v > 0 ? '+' : '') + v + '%');
-  setRange('brightness', p.brightness, 'v-bright', v => parseFloat(v).toFixed(2));
-  setRange('contrast',   p.contrast,   'v-contrast',v => parseFloat(v).toFixed(2));
-  setRange('saturation', p.saturation, 'v-sat',    v => parseFloat(v).toFixed(2));
-  setRange('zoom',       p.zoom,       'v-zoom',   v => v);
-
-  document.getElementById('grain').checked   = p.grain;
-  document.getElementById('vignette').checked = p.vignette;
-  document.getElementById('flip').checked    = p.flip;
-
-  const names = { hype:'⚡ Hype Mode', dark:'🌑 Dark Moody', clean:'✨ Clean Viral', cinema:'🎬 Cinematic', tiktok:'🔥 TikTok Fast' };
-  toast('Preset primijenjen: ' + (names[key] || key));
-}
-
-/* ─────────────────────────────────────────────────────────────
-   READ SETTINGS from UI
-───────────────────────────────────────────────────────────── */
-function readSettings() {
-  const g = id => document.getElementById(id);
-  const v = id => parseFloat(g(id).value);
-  const c = id => g(id).checked;
-  const t = id => (g(id).value || '').trim();
-
-  let speed      = v('speed');
-  let pitch      = v('pitch');
-  let brightness = v('brightness');
-  let contrast   = v('contrast');
-  let saturation = v('saturation');
-
-  // Auto-vary — add small random offsets to fool platform detection
-  if (c('auto-vary')) {
-    const rand = (lo, hi) => lo + Math.random() * (hi - lo);
-    brightness  = Math.max(-0.5, Math.min(0.5, brightness + rand(-0.03, 0.03)));
-    saturation  = Math.max(0,    Math.min(3.0, saturation + rand(-0.08, 0.08)));
-    pitch       = Math.max(-15,  Math.min(15,  pitch + rand(-2, 2)));
-    speed       = Math.max(0.8,  Math.min(1.4, speed + rand(-0.03, 0.03)));
-    log(`Auto-vary: brt=${brightness.toFixed(3)} sat=${saturation.toFixed(3)} pitch=${pitch.toFixed(1)} spd=${speed.toFixed(3)}`, 'warn');
-  }
-
+// ── Read settings ─────────────────────────────────────────────────────────
+function getSettings() {
   return {
-    speed, pitch, brightness, contrast, saturation,
-    zoom:          parseInt(g('zoom').value),
-    grain:         c('grain'),
-    vignette:      c('vignette'),
-    flip:          c('flip'),
-    overlayText:   t('overlay-text'),
-    fontSize:      v('font-size'),
-    textColor:     g('text-color').value.replace('#',''),
-    logoPosCode:   g('logo-pos').value,   // BR/BL/TR/TL
-    logoSize:      parseInt(g('logo-size').value),
-    logoOpacity:   v('logo-opacity'),
-    outroEnabled:  c('outro-enabled'),
-    outroText:     t('outro-text'),
-    captionsEnabled: c('captions-enabled'),
-    captionsText:  t('captions-text'),
+    speed:     parseFloat(document.getElementById('s-speed').value),
+    bright:    parseFloat(document.getElementById('s-bright').value),
+    contrast:  parseFloat(document.getElementById('s-contrast').value),
+    sat:       parseFloat(document.getElementById('s-sat').value),
+    grain:     document.getElementById('s-grain').checked,
+    flip:      document.getElementById('s-flip').checked,
+    url:       (document.getElementById('s-url').value || '').replace(/'/g,"'").replace(/:/g,'\\:').replace(/,/g,' ').replace(/;/g,' ').trim(),
+    logoPos:   document.getElementById('s-logopos').value,
+    logoSize:  parseInt(document.getElementById('s-logosize').value),
+    logoOp:    parseFloat(document.getElementById('s-logoop').value),
+    outro:     document.getElementById('s-outro').checked,
+    outroText: (document.getElementById('s-outro-text').value || '').replace(/'/g,"'").replace(/:/g,' ').trim(),
   };
 }
 
-/* ─────────────────────────────────────────────────────────────
-   FILE → Uint8Array helper
-───────────────────────────────────────────────────────────── */
-function fileToUint8(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = e => resolve(new Uint8Array(e.target.result));
-    reader.onerror = reject;
-    reader.readAsArrayBuffer(file);
-  });
+// ── Safe text for FFmpeg drawtext ─────────────────────────────────────────
+function esc(t) {
+  return (t || '').replace(/\\/g, '/').replace(/'/g, '').replace(/"/g, '').replace(/:/g, ' ').replace(/[,;[\]]/g, ' ').trim();
 }
 
-/* ─────────────────────────────────────────────────────────────
-   LOAD FFmpeg.wasm (lazy — only when Brand It is clicked)
-   Uses @ffmpeg/ffmpeg@0.11.6 UMD build
-───────────────────────────────────────────────────────────── */
-async function loadFFmpeg() {
-  if (ffmpegLoaded) return true;
-  log('Učitavam FFmpeg.wasm...');
-  setProgress(5, 'Učitavam FFmpeg.wasm...');
+// ── Build FFmpeg args ─────────────────────────────────────────────────────
+function buildArgs(s, hasLogo) {
+  // Video filter chain
+  const vf = [
+    'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black'
+  ];
 
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js';
-    script.onload = async () => {
-      try {
-        // FFmpeg.createFFmpeg is global after UMD script loads
-        ffmpeg = FFmpeg.createFFmpeg({
-          corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
-          log: false,
-          progress: ({ ratio }) => {
-            // ratio 0..1 maps to progress 20..85
-            const pct = Math.round(20 + ratio * 65);
-            setProgress(pct, `FFmpeg procesira... ${Math.round(ratio*100)}%`);
-          }
-        });
-        await ffmpeg.load();
-        ffmpegLoaded = true;
-        log('FFmpeg.wasm učitan ✓', 'ok');
-        resolve(true);
-      } catch (err) {
-        log('FFmpeg load error: ' + err.message, 'err');
-        reject(err);
-      }
-    };
-    script.onerror = () => reject(new Error('Ne mogu učitati FFmpeg.wasm. Provjeri internet konekciju i COEP/COOP headere.'));
-    document.head.appendChild(script);
-  });
-}
-
-/* ─────────────────────────────────────────────────────────────
-   BUILD FFMPEG FILTER GRAPH
-   Returns { videoFilter, audioFilter, inputArgs }
-   inputArgs = extra -i flags (logo, outro image)
-───────────────────────────────────────────────────────────── */
-function safeText(t) {
-  // Escape text for FFmpeg drawtext — avoid chars that break filter parsing
-  return (t || ‘’).replace(/\\/g, ‘/’).replace(/’/g, ‘’).replace(/:/g, ‘ ‘).replace(/\[/g, ‘’).replace(/\]/g, ‘’).replace(/,/g, ‘ ‘).replace(/;/g, ‘ ‘).trim();
-}
-
-function buildFilters(s, hasLogo) {
-  /* ── Build video filter list ── */
-  const vf = [];
-
-  // 1. Scale to 9:16 — landscape gets padded with black bars, portrait fits
-  vf.push(‘scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black’);
-
-  // 2. Speed (setpts changes video PTS = duration)
   if (Math.abs(s.speed - 1.0) > 0.02) {
-    vf.push(`setpts=${(1 / s.speed).toFixed(4)}*PTS`);
+    vf.push('setpts=' + (1 / s.speed).toFixed(4) + '*PTS');
   }
 
-  // 3. Color grading — only apply if values differ from default
-  const hasBr = Math.abs(s.brightness) > 0.01;
-  const hasCt = Math.abs(s.contrast - 1.0) > 0.01;
-  const hasSat = Math.abs(s.saturation - 1.0) > 0.01;
+  const hasBr  = Math.abs(s.bright) > 0.005;
+  const hasCt  = Math.abs(s.contrast - 1) > 0.01;
+  const hasSat = Math.abs(s.sat - 1) > 0.01;
   if (hasBr || hasCt || hasSat) {
-    vf.push(`eq=brightness=${s.brightness.toFixed(2)}:contrast=${s.contrast.toFixed(2)}:saturation=${s.saturation.toFixed(2)}`);
+    vf.push('eq=brightness=' + s.bright.toFixed(3) + ':contrast=' + s.contrast.toFixed(2) + ':saturation=' + s.sat.toFixed(2));
   }
 
-  // 4. Static zoom (scale up + crop center) — skip zoompan (too slow for wasm)
-  if (s.zoom > 0) {
-    const f = (1 + s.zoom * 0.006).toFixed(3); // zoom 1–10 → scale 1.006–1.060
-    vf.push(`scale=iw*${f}:ih*${f},crop=1080:1920`);
+  if (s.grain) vf.push('noise=alls=8:allf=t');
+  if (s.flip)  vf.push('hflip');
+
+  const urlText = esc(s.url);
+  if (urlText) {
+    vf.push("drawtext=text='" + urlText + "':fontsize=34:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h-text_h-50");
   }
 
-  // 5. Film grain
-  if (s.grain) vf.push(‘noise=alls=8:allf=t’);
+  const vfStr = vf.join(',');
 
-  // 6. Horizontal flip
-  if (s.flip) vf.push(‘hflip’);
-
-  // 7. Captions (manual subtitle text)
-  if (s.captionsEnabled && s.captionsText) {
-    const ct = safeText(s.captionsText);
-    if (ct) vf.push(`drawtext=text=’${ct}’:fontsize=34:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.78:box=1:boxcolor=black@0.55:boxborderw=6`);
-  }
-
-  // 8. URL branding text
-  if (s.overlayText) {
-    const ot = safeText(s.overlayText);
-    const hex = (s.textColor || ‘#ffffff’).replace(‘#’, ‘’);
-    if (ot) vf.push(`drawtext=text=’${ot}’:fontsize=${Math.round(s.fontSize)}:fontcolor=0x${hex}:shadowcolor=black@0.8:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h-text_h-48`);
-  }
-
-  const vfStr = vf.join(‘,’);
-
-  /* ── Build audio filter ── */
-  const pitch = 1 + (s.pitch / 100);
-  const rate = Math.round(44100 * pitch);
-  const tempo = Math.max(0.5, Math.min(2.0, s.speed / pitch));
+  // Audio filter
   const af = [];
-  if (Math.abs(pitch - 1.0) > 0.01) af.push(`asetrate=${rate}`);
-  if (Math.abs(tempo - 1.0) > 0.01) af.push(`atempo=${tempo.toFixed(4)}`);
-  af.push(‘volume=1.3’);
-  const afStr = af.join(‘,’);
-
-  /* ── Assemble FFmpeg args (video + logo) ── */
-  // Strategy: use -vf for no-logo (simpler, more stable), -filter_complex for logo
-  let useFilterComplex = false;
-  let filterComplexStr = ‘’;
-
-  if (hasLogo) {
-    useFilterComplex = true;
-    const pad = 30, ls = s.logoSize;
-    const pos = { BR:`W-w-${pad}:H-h-${pad}`, BL:`${pad}:H-h-${pad}`, TR:`W-w-${pad}:${pad}`, TL:`${pad}:${pad}` }[s.logoPosCode] || `W-w-${pad}:H-h-${pad}`;
-    const opa = Math.min(1, Math.max(0, s.logoOpacity)).toFixed(2);
-    filterComplexStr = [
-      `[0:v]${vfStr}[vbase]`,
-      `[1:v]scale=${ls}:${ls}:force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=${opa}[logo]`,
-      `[vbase][logo]overlay=x=${pos}[vout]`
-    ].join(‘;’);
+  if (Math.abs(s.speed - 1.0) > 0.02) {
+    const tempo = Math.max(0.5, Math.min(2.0, s.speed));
+    af.push('atempo=' + tempo.toFixed(4));
   }
+  af.push('volume=1.3');
+  const afStr = af.join(',');
 
-  return { vfStr, afStr, useFilterComplex, filterComplexStr };
+  // Build final args
+  if (hasLogo) {
+    const pad = 28, ls = s.logoSize;
+    const posMap = {
+      BR: 'W-w-' + pad + ':H-h-' + pad,
+      BL: pad + ':H-h-' + pad,
+      TR: 'W-w-' + pad + ':' + pad,
+      TL: pad + ':' + pad,
+    };
+    const pos = posMap[s.logoPos] || posMap['BR'];
+    const opa = s.logoOp.toFixed(2);
+    const fc = [
+      '[0:v]' + vfStr + '[vb]',
+      '[1:v]scale=' + ls + ':' + ls + ':force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=' + opa + '[lg]',
+      '[vb][lg]overlay=x=' + pos + '[vout]'
+    ].join(';');
+    return { useFC: true, fc, afStr };
+  } else {
+    return { useFC: false, vfStr, afStr };
+  }
 }
 
-/* ─────────────────────────────────────────────────────────────
-   MAIN BRAND PIPELINE
-───────────────────────────────────────────────────────────── */
-async function runBrand() {
-  // ── Validation ──
-  if (!videoFile) {
-    toast('Moraš uploadati video!', 'err');
-    return;
-  }
-  if (videoFile.size > 500 * 1024 * 1024) {
-    toast('Video je prevelik! Maks. 500 MB.', 'err');
-    return;
-  }
+// ── MAIN BRAND FUNCTION ───────────────────────────────────────────────────
+async function startBrand() {
+  if (!videoFile) { toast('Odaberi video prvo!'); return; }
 
-  // ── UI: show progress, hide download ──
+  // UI state
+  currentPct = 0;
   document.getElementById('brand-btn').disabled = true;
-  document.getElementById('progress-panel').style.display = '';
-  document.getElementById('download-panel').style.display = 'none';
+  document.getElementById('prog-panel').style.display = '';
+  document.getElementById('dl-panel').style.display = 'none';
   document.getElementById('log-box').innerHTML = '';
-  setProgress(0, 'Pripremam...');
+  document.getElementById('prog-label').textContent = 'Inicijalizacija...';
+  window.scrollTo({ top: document.getElementById('prog-panel').offsetTop - 20, behavior: 'smooth' });
 
   try {
-    // ── Step 1: Load FFmpeg.wasm (lazy) ──
-    await loadFFmpeg();
-    setProgress(10, 'FFmpeg spreman. Učitavam fajlove...');
+    // Step 1: Load FFmpeg
+    if (!ffmpeg) {
+      setProgress(3, 'Učitavam FFmpeg engine...');
+      log('Učitavam FFmpeg.wasm (~25MB)...');
+      document.getElementById('ffmpeg-status').textContent = 'Učitavam...';
+      ffmpeg = createFFmpeg({
+        corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
+        log: false
+      });
+      await ffmpeg.load();
+      document.getElementById('ffmpeg-status').textContent = 'Aktivan';
+      log('FFmpeg spreman.', 'ok');
+    }
 
-    // ── Step 2: Read settings ──
-    const s = readSettings();
-    const hasLogo     = !!logoFile;
-    const hasOutroImg = !!outroFile;
+    setProgress(8, 'Priprema datoteka...');
+    const s = getSettings();
+    const hasLogo = !!logoFile;
 
-    log(`Speed=${s.speed.toFixed(2)} Pitch=${s.pitch.toFixed(1)}% BRT=${s.brightness.toFixed(3)} CNT=${s.contrast.toFixed(2)} SAT=${s.saturation.toFixed(2)} Zoom=${s.zoom}`);
-    log(`Grain=${s.grain} Vignette=${s.vignette} Flip=${s.flip} Logo=${hasLogo} Outro=${s.outroEnabled}`);
-
-    // ── Step 3: Write input files to FFmpeg virtual FS ──
-    setProgress(12, 'Pišem fajlove u FFmpeg FS...');
-
-    const videoData = await fileToUint8(videoFile);
-    ffmpeg.FS('writeFile', 'input.mp4', videoData);
-    log(`Video upisan: ${(videoData.length/1024/1024).toFixed(1)} MB`, 'ok');
+    // Step 2: Write files to MEMFS
+    log('Pišem video u memoriju...');
+    ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(videoFile));
+    log('Video u memoriji (' + (videoFile.size / 1024 / 1024).toFixed(1) + ' MB).', 'ok');
 
     if (hasLogo) {
-      const logoData = await fileToUint8(logoFile);
-      ffmpeg.FS('writeFile', 'logo.png', logoData);
-      log('Logo upisan ✓', 'ok');
+      ffmpeg.FS('writeFile', 'logo.png', await fetchFile(logoFile));
+      log('Logo u memoriji.', 'ok');
     }
 
-    if (hasOutroImg) {
-      const outroData = await fileToUint8(outroFile);
-      ffmpeg.FS('writeFile', 'outro_bg.png', outroData);
-      log('Outro slika upisana ✓', 'ok');
-    }
+    // Step 3: Build args
+    setProgress(12, 'Gradim filter graf...');
+    const { useFC, fc, vfStr, afStr } = buildArgs(s, hasLogo);
 
-    // ── Step 4: Build filter graph ──
-    const { vfStr, afStr, useFilterComplex, filterComplexStr } = buildFilters(s, hasLogo);
-    log('Filter graph izgrađen ✓', 'ok');
-
-    // ── Step 5: Process main video ──
-    setProgress(18, 'FFmpeg procesira glavni video...');
+    // Step 4: Run main encode
+    setProgress(15, 'Obrađujem video...');
+    log('Pokretam FFmpeg...');
+    startFakeProgress(15, 83, 60000); // animirani progress dok traje encode
 
     const mainArgs = ['-i', 'input.mp4'];
     if (hasLogo) mainArgs.push('-i', 'logo.png');
 
-    if (useFilterComplex) {
-      // Logo: filter_complex for video, map audio directly
-      mainArgs.push('-filter_complex', filterComplexStr, '-map', '[vout]', '-map', '0:a?');
+    if (useFC) {
+      mainArgs.push('-filter_complex', fc, '-map', '[vout]', '-map', '0:a?');
     } else {
-      // No logo: simpler -vf (more stable in wasm)
       mainArgs.push('-vf', vfStr);
     }
 
-    // Audio filter via -af (separate from video, handles missing audio gracefully with 0:a?)
-    if (afStr) mainArgs.push('-af', afStr);
-
+    mainArgs.push('-af', afStr);
     mainArgs.push(
-      '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p',
-      '-c:a', 'aac', '-b:a', '128k',
-      '-movflags', '+faststart', '-r', '30',
-      '-y', 'main_out.mp4'
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+      '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k',
+      '-movflags', '+faststart', '-r', '30', '-y', 'main.mp4'
     );
 
-    log('Pokretam FFmpeg...', 'warn');
-
     await ffmpeg.run(...mainArgs);
-    log('Glavni video obrađen ✓', 'ok');
-    setProgress(85, 'Glavni video gotov. Generiram outro...');
+    clearInterval(progInterval);
 
-    // ── Step 6: Generate 2-second outro (if enabled) ──
-    let finalFile = 'main_out.mp4';
+    // Verify output
+    let mainExists = false;
+    try { const d = ffmpeg.FS('readFile', 'main.mp4'); mainExists = d && d.length > 1000; } catch {}
+    if (!mainExists) throw new Error('FFmpeg nije kreirao output. Provjeri filter postavke.');
+    log('Glavni video obrađen.', 'ok');
 
-    if (s.outroEnabled) {
-      log('Generiram outro ekran (2 sekunde)...');
+    // Step 5: Outro (optional)
+    let finalFile = 'main.mp4';
 
-      // Build outro: black or custom image + logo + text + fade in/out
-      const outroText = s.outroText || '';
-      const outroTextSafe = outroText.replace(/'/g, "\\'").replace(/:/g, "\\:");
-
-      // Outro video filters — start from image or black frame
-      const outroFilters = [];
-
-      if (hasOutroImg) {
-        // Scale outro image to 1080x1920
-        outroFilters.push('[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[outro_base]');
-      } else {
-        // Solid black 1080x1920 2 seconds via lavfi color source
-        // We'll use the main video's last frame approach — simpler: just color=black
-      }
-
-      // Outro args — use color source for black bg or outro_bg.png
-      const outroArgs = [];
-
-      if (hasOutroImg) {
-        outroArgs.push('-loop', '1', '-i', 'outro_bg.png');
-      } else {
-        // lavfi black source
-        outroArgs.push('-f', 'lavfi', '-i', 'color=c=black:s=1080x1920:r=30');
-      }
-
-      if (hasLogo) outroArgs.push('-i', 'logo.png');
-
-      // Duration = 2 seconds
-      outroArgs.push('-t', '2');
-
-      // Build outro — simple black screen + optional logo + text (no fade, no filter_complex if avoidable)
-      const ls = s.logoSize;
-      const ot = safeText(outroText);
-
+    if (s.outro) {
+      setProgress(86, 'Generiram outro...');
+      log('Generiram outro ekran...');
       try {
+        const ot = esc(s.outroText);
+        const outroArgs = ['-f', 'lavfi', '-i', 'color=c=black:s=1080x1920:r=30'];
+        if (hasLogo) outroArgs.push('-i', 'logo.png');
+        outroArgs.push('-t', '2');
+
+        let oVf;
         if (hasLogo) {
-          // With logo: need filter_complex for overlay
-          const opa = Math.min(1, Math.max(0, s.logoOpacity)).toFixed(2);
-          let oFC;
+          const ls = s.logoSize;
+          const opa = s.logoOp.toFixed(2);
+          let ofc = [
+            '[0:v][1:v]null[baz]',
+            '[1:v]scale=' + ls + ':' + ls + ':force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=' + opa + '[lg2]',
+            '[0:v][lg2]overlay=x=(W-w)/2:y=(H-h)/2-40[ovl]'
+          ];
           if (ot) {
-            oFC = [
-              `[0:v]scale=1080:1920[obg]`,
-              `[1:v]scale=${ls}:${ls}:force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=${opa}[ologoa]`,
-              `[obg][ologoa]overlay=x=(W-w)/2:y=(H-h)/2-40[owl]`,
-              `[owl]drawtext=text='${ot}':fontsize=38:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2+${Math.round(ls/2)+20}[oout]`
-            ].join(';');
+            ofc.push("[ovl]drawtext=text='" + ot + "':fontsize=38:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2+" + (Math.round(ls / 2) + 16) + "[oout]");
           } else {
-            oFC = [
-              `[0:v]scale=1080:1920[obg]`,
-              `[1:v]scale=${ls}:${ls}:force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=${opa}[ologoa]`,
-              `[obg][ologoa]overlay=x=(W-w)/2:y=(H-h)/2[oout]`
-            ].join(';');
+            ofc[ofc.length - 1] = ofc[ofc.length - 1].replace('[ovl]', '[ovl]').replace('[ovl]', '') + '';
+            // Simplify: rename last output
+            ofc = ofc.map((f, i) => i === ofc.length - 1 ? f.replace('[ovl]', '[ovl]') : f);
+            ofc[ofc.length - 1] = ofc[ofc.length - 1].replace('[ovl]', '[oout]');
           }
-          await ffmpeg.run(
-            '-f', 'lavfi', '-i', 'color=c=black:s=1080x1920:r=30',
-            '-i', 'logo.png', '-t', '2',
-            '-filter_complex', oFC, '-map', '[oout]', '-an',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-r', '30', '-y', 'outro.mp4'
-          );
+          outroArgs.push('-filter_complex', ofc.join(';'), '-map', '[oout]');
         } else if (ot) {
-          // Text only — simple -vf drawtext on black
-          await ffmpeg.run(
-            '-f', 'lavfi', '-i', 'color=c=black:s=1080x1920:r=30', '-t', '2',
-            '-vf', `drawtext=text='${ot}':fontsize=44:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2`,
-            '-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-r', '30', '-y', 'outro.mp4'
-          );
-        } else {
-          // Plain black 2s
-          await ffmpeg.run(
-            '-f', 'lavfi', '-i', 'color=c=black:s=1080x1920:r=30', '-t', '2',
-            '-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-r', '30', '-y', 'outro.mp4'
-          );
+          outroArgs.push('-vf', "drawtext=text='" + ot + "':fontsize=44:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2");
         }
-        log('Outro ekran generiran ✓', 'ok');
 
-        // ── Step 7: Concat main + outro using re-encode (concat demuxer requires same streams) ──
-        setProgress(90, 'Spajam outro s videom...');
+        outroArgs.push('-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-r', '30', '-y', 'outro.mp4');
+        await ffmpeg.run(...outroArgs);
+
+        // Concat
+        setProgress(92, 'Spajam outro...');
         await ffmpeg.run(
-          '-i', 'main_out.mp4', '-i', 'outro.mp4',
-          '-filter_complex', '[0:v][0:a][1:v]concat=n=2:v=1:a=0[vout]',
+          '-i', 'main.mp4', '-i', 'outro.mp4',
+          '-filter_complex', '[0:v][1:v]concat=n=2:v=1:a=0[vout]',
           '-map', '[vout]',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p',
-          '-an', '-movflags', '+faststart', '-r', '30', '-y', 'final_out.mp4'
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+          '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-r', '30', '-y', 'final.mp4'
         );
-        finalFile = 'final_out.mp4';
-        log('Concat završen ✓', 'ok');
-      } catch (err) {
-        log('Outro nije uspio, nastavljam bez outra: ' + err.message, 'warn');
-        // Continue without outro
+        finalFile = 'final.mp4';
+        log('Outro spojen.', 'ok');
+      } catch (e) {
+        log('Outro preskočen: ' + e.message, 'warn');
       }
     }
 
-    // ── Step 8: Read output (with existence check) ──
-    setProgress(96, 'Čitam output...');
-    // Verify output file exists before reading
-    let outputExists = false;
-    try {
-      const stat = ffmpeg.FS('stat', finalFile);
-      outputExists = stat && stat.size > 0;
-    } catch (e) { outputExists = false; }
-    if (!outputExists) {
-      throw new Error(`FFmpeg nije kreirao output file '${finalFile}'. Pokušaj bez Zoom/Vignette opcija ili s manjim videom.`);
-    }
-    outputData = ffmpeg.FS('readFile', finalFile);
-    const sizeMB = (outputData.length / 1024 / 1024).toFixed(2);
-    log(`Output: ${sizeMB} MB ✓`, 'ok');
+    // Step 6: Read output
+    setProgress(97, 'Čitam output...');
+    const data = ffmpeg.FS('readFile', finalFile);
+    outputBlob = new Blob([data.buffer], { type: 'video/mp4' });
+    const sizeMB = (data.length / 1024 / 1024).toFixed(2);
+    log('Output: ' + sizeMB + ' MB', 'ok');
 
-    // ── Step 9: Cleanup FS ──
-    try {
-      ffmpeg.FS('unlink', 'input.mp4');
-      ffmpeg.FS('unlink', 'main_out.mp4');
-      if (s.outroEnabled) {
-        try { ffmpeg.FS('unlink', 'outro.mp4'); } catch {}
-        try { ffmpeg.FS('unlink', 'final_out.mp4'); } catch {}
-        try { ffmpeg.FS('unlink', 'concat_list.txt'); } catch {}
-      }
-      if (hasLogo) ffmpeg.FS('unlink', 'logo.png');
-      if (hasOutroImg) ffmpeg.FS('unlink', 'outro_bg.png');
-    } catch (e) { /* ignore cleanup errors */ }
+    // Cleanup MEMFS
+    try { ffmpeg.FS('unlink', 'input.mp4'); } catch {}
+    try { ffmpeg.FS('unlink', 'main.mp4'); } catch {}
+    try { ffmpeg.FS('unlink', 'final.mp4'); } catch {}
+    try { if (hasLogo) ffmpeg.FS('unlink', 'logo.png'); } catch {}
+    try { ffmpeg.FS('unlink', 'outro.mp4'); } catch {}
 
-    // ── Step 10: Done ──
-    setProgress(100, 'Završeno!');
-    outputName = `peptidihr-branded-${Date.now()}.mp4`;
-    document.getElementById('dl-filename').textContent = outputName + ` (${sizeMB} MB)`;
-    document.getElementById('download-panel').style.display = '';
-    document.getElementById('progress-panel').style.display = 'none';
-
-    toast('Video je spreman! Klikni za download.', 'ok', 5000);
+    // Done
+    setProgress(100, 'Gotovo!');
+    log('Sve gotovo!', 'ok');
+    document.getElementById('dl-info').textContent = 'Veličina: ' + sizeMB + ' MB • Format: MP4 1080×1920 (9:16)';
+    document.getElementById('dl-panel').style.display = '';
+    setTimeout(() => {
+      document.getElementById('prog-panel').style.display = 'none';
+    }, 1500);
+    window.scrollTo({ top: document.getElementById('dl-panel').offsetTop - 20, behavior: 'smooth' });
+    toast('Video je spreman za download!');
 
   } catch (err) {
-    log('GREŠKA: ' + err.message, 'err');
+    clearInterval(progInterval);
     setProgress(0, 'Greška!');
-    toast('Greška: ' + err.message, 'err', 7000);
+    log('GREŠKA: ' + err.message, 'err');
+    document.getElementById('prog-label').textContent = 'Greška!';
+    toast('Greška: ' + err.message);
     console.error(err);
   } finally {
     document.getElementById('brand-btn').disabled = false;
   }
 }
 
-/* ─────────────────────────────────────────────────────────────
-   DOWNLOAD
-───────────────────────────────────────────────────────────── */
-document.getElementById('download-btn').addEventListener('click', () => {
-  if (!outputData) {
-    toast('Nema videa za download. Pokreni Brand It prvo.', 'warn');
-    return;
-  }
-  const blob = new Blob([outputData.buffer], { type: 'video/mp4' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = outputName || `peptidihr-branded-${Date.now()}.mp4`;
+// ── Download ──────────────────────────────────────────────────────────────
+document.getElementById('dl-btn').addEventListener('click', function () {
+  if (!outputBlob) { toast('Nema videa. Pokreni Brand It prvo.'); return; }
+  const url = URL.createObjectURL(outputBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'peptidihr-' + Date.now() + '.mp4';
   document.body.appendChild(a);
   a.click();
-  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
-  toast('Download pokrenut!', 'ok');
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 });
 
-/* ─────────────────────────────────────────────────────────────
-   BRAND IT button
-───────────────────────────────────────────────────────────── */
-document.getElementById('brand-btn').addEventListener('click', runBrand);
-
-/* ─────────────────────────────────────────────────────────────
-   KEYBOARD SHORTCUT: Ctrl+Enter = Brand It
-───────────────────────────────────────────────────────────── */
-document.addEventListener('keydown', e => {
-  if (e.ctrlKey && e.key === 'Enter') {
-    e.preventDefault();
-    document.getElementById('brand-btn').click();
-  }
-});
-
-/* ─────────────────────────────────────────────────────────────
-   INIT — log browser support info
-───────────────────────────────────────────────────────────── */
-(function init() {
-  // Check SharedArrayBuffer availability (required for FFmpeg.wasm threading)
-  if (typeof SharedArrayBuffer === 'undefined') {
-    const warn = document.createElement('div');
-    warn.style.cssText = 'background:#422006;color:#fcd34d;border:1px solid #92400e;border-radius:10px;padding:12px 16px;margin:16px auto;max-width:600px;font-size:13px;font-weight:600;';
-    warn.innerHTML = '⚠️ SharedArrayBuffer nije dostupan. FFmpeg.wasm možda neće raditi. Provjeri da server šalje COEP/COOP headere (vercel.json ih ima postavljeno).';
-    document.querySelector('main').prepend(warn);
-  }
-
-  // Drag-and-drop on the whole page (prevent accidental navigation)
-  document.addEventListener('dragover', e => e.preventDefault());
-  document.addEventListener('drop',     e => e.preventDefault());
-})();
+// ── Reset ─────────────────────────────────────────────────────────────────
+function resetApp() {
+  videoFile = null; logoFile = null; outroFile = null; outputBlob = null;
+  currentPct = 0;
+  document.getElementById('dl-panel').style.display = 'none';
+  document.getElementById('prog-panel').style.display = 'none';
+  ['lbl-video','lbl-logo','lbl-outro'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = el.id === 'lbl-video' ? 'MP4, MOV, WEBM • max 500MB' : el.id === 'lbl-logo' ? 'PNG s providnom pozadinom' : 'Pozadina za 2s outro ekran';
+  });
+  ['lbl-video-wrap','lbl-logo-wrap','lbl-outro-wrap'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('has-file');
+  });
+  ['inp-video','inp-logo','inp-outro'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 </script>
-
 </body>
 </html>
