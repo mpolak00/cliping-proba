@@ -362,7 +362,7 @@ function sv(id, val) {
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────
-function toast(msg, dur = 3000) {
+function toast(msg, dur = 3500) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.style.opacity = '1';
@@ -410,8 +410,13 @@ async function checkSavedJob() {
   const savedId = localStorage.getItem('brander_jobId');
   if (!savedId) return;
   try {
-    const res = await fetch(API_URL + '/api/status/' + savedId);
-    if (!res.ok) { localStorage.removeItem('brander_jobId'); return; }
+    const res = await fetch(API_URL + '/api/status/' + savedId, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) {
+      // 404 = server restartao, job izgubljen
+      localStorage.removeItem('brander_jobId');
+      if (res.status === 404) toast('Prethodni video je izgubljen (server se restartao). Potrebna je nova obrada.', 6000);
+      return;
+    }
     const data = await res.json();
     if (data.status === 'done' && data.hasOutput) {
       document.getElementById('resume-jobid').textContent = savedId;
@@ -652,16 +657,21 @@ async function startBrand() {
         reject(new Error(msg));
       }
 
-      // Polling fallback — provjeri status svakih 5s
+      // Polling fallback — provjeri status svakih 5s, odustaj nakon 12 neuspjeha (60s)
+      let pollFails = 0;
       pollTimer = setInterval(async () => {
         if (settled) return;
         try {
-          const r = await fetch(API_URL + '/api/status/' + jobId);
-          if (!r.ok) return;
+          const r = await fetch(API_URL + '/api/status/' + jobId, { signal: AbortSignal.timeout(8000) });
+          pollFails = 0;
+          if (!r.ok) { pollFails++; return; }
           const d = await r.json();
           if (d.status === 'done' && d.hasOutput) { done(); }
           else if (d.status === 'error') { fail(d.errorMessage || 'FFmpeg greška'); }
-        } catch {}
+        } catch {
+          pollFails++;
+          if (pollFails >= 12) { fail('Server nedostupan — pokušaj ponovo za koji trenutak'); }
+        }
       }, 5000);
 
       const sse = new EventSource(API_URL + '/api/progress/' + jobId);
