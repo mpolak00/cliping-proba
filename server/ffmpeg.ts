@@ -30,6 +30,7 @@ export interface ProcessOptions {
   addOutro: boolean;
   outroText: string;
   outroImagePath?: string;
+  resolution?: '1080' | '720' | '540';
   onProgress?: (progress: number) => void;
 }
 
@@ -71,11 +72,13 @@ export function processVideo(options: ProcessOptions): Promise<void> {
     // ──────────────────────────────────────────
     const vfFilters: string[] = [];
 
-    // 1. Scale / crop to 9:16 (1080×1920)
+    // 1. Scale / crop to 9:16
+    const resMap = { '540': [540, 960], '720': [720, 1280], '1080': [1080, 1920] };
+    const [rW, rH] = resMap[options.resolution ?? '720'];
     vfFilters.push(
       [
-        `scale=w=1080:h=1920:force_original_aspect_ratio=increase`,
-        `crop=1080:1920`,
+        `scale=w=${rW}:h=${rH}:force_original_aspect_ratio=increase`,
+        `crop=${rW}:${rH}`,
       ].join(',')
     );
 
@@ -174,9 +177,9 @@ export function processVideo(options: ProcessOptions): Promise<void> {
 
       // Scale + crop to 9:16
       const s1 = nl();
-      cf.push({ filter: 'scale', options: 'w=1080:h=1920:force_original_aspect_ratio=increase', inputs: [cur], outputs: [s1] });
+      cf.push({ filter: 'scale', options: `w=${rW}:h=${rH}:force_original_aspect_ratio=increase`, inputs: [cur], outputs: [s1] });
       const s2 = nl();
-      cf.push({ filter: 'crop', options: '1080:1920', inputs: [s1], outputs: [s2] });
+      cf.push({ filter: 'crop', options: `${rW}:${rH}`, inputs: [s1], outputs: [s2] });
       cur = s2;
 
       // Color eq

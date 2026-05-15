@@ -231,6 +231,16 @@ select{background:#09090b;border:1px solid var(--border);color:var(--text);borde
           <input type="text" id="s-url" value="peptidihr.com" placeholder="npr. peptidihr.com">
         </div>
 
+        <!-- Resolution -->
+        <div class="row">
+          <label>Rezolucija</label>
+          <select id="s-res">
+            <option value="720">720p — brzo (preporučeno)</option>
+            <option value="1080">1080p — sporo</option>
+            <option value="540">540p — najbrže</option>
+          </select>
+        </div>
+
         <!-- Logo position -->
         <div class="row">
           <label>Pozicija loga</label>
@@ -500,6 +510,7 @@ function getSettings() {
     grain:     document.getElementById('s-grain').checked,
     flip:      document.getElementById('s-flip').checked,
     url:       (document.getElementById('s-url').value || '').replace(/'/g,"'").replace(/:/g,'\\:').replace(/,/g,' ').replace(/;/g,' ').trim(),
+    res:       document.getElementById('s-res').value,
     logoPos:   document.getElementById('s-logopos').value,
     logoSize:  parseInt(document.getElementById('s-logosize').value),
     logoOp:    parseFloat(document.getElementById('s-logoop').value),
@@ -605,6 +616,7 @@ async function startBrand() {
       addFlip: s.flip,
       addOutro: s.outro,
       outroText: s.outroText,
+      resolution: s.res,
     };
 
     const processRes = await fetch(API_URL + '/api/process', {
