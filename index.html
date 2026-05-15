@@ -305,7 +305,7 @@ select{background:#09090b;border:1px solid var(--border);color:var(--text);borde
 <!-- TOAST -->
 <div class="toast" id="toast" style="opacity:0"></div>
 
-<!-- FFmpeg.wasm 0.11.6 -->
+<!-- FFmpeg.wasm 0.11.6 single-threaded (radi na iOS Safari bez COOP/COEP) -->
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <script>
 'use strict';
@@ -501,7 +501,7 @@ async function startBrand() {
       log('Učitavam FFmpeg.wasm (~25MB)...');
       document.getElementById('ffmpeg-status').textContent = 'Učitavam...';
       ffmpeg = createFFmpeg({
-        corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
+        corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.0/dist/ffmpeg-core.js',
         log: false
       });
       await ffmpeg.load();
