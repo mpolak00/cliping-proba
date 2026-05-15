@@ -619,30 +619,51 @@ async function startBrand() {
     localStorage.setItem('brander_jobId', jobId);
     log('Obrada pokrenuta. JobID: ' + jobId.slice(0,8) + '...', 'ok');
 
-    // ── KORAK 3: Praćenje progresa via SSE ───────────────────────────────
+    // ── KORAK 3: Praćenje progresa via SSE + polling fallback ────────────
     setProgress(30, 'Obrađujem video...');
     startFakeProgress(30, 90, 120000);
 
     await new Promise((resolve, reject) => {
+      let settled = false;
+      let pollTimer = null;
+
+      function done() {
+        if (settled) return;
+        settled = true;
+        clearInterval(pollTimer);
+        resolve();
+      }
+      function fail(msg) {
+        if (settled) return;
+        settled = true;
+        clearInterval(pollTimer);
+        reject(new Error(msg));
+      }
+
+      // Polling fallback — provjeri status svakih 5s
+      pollTimer = setInterval(async () => {
+        if (settled) return;
+        try {
+          const r = await fetch(API_URL + '/api/status/' + jobId);
+          if (!r.ok) return;
+          const d = await r.json();
+          if (d.status === 'done' && d.hasOutput) { done(); }
+          else if (d.status === 'error') { fail(d.errorMessage || 'FFmpeg greška'); }
+        } catch {}
+      }, 5000);
+
       const sse = new EventSource(API_URL + '/api/progress/' + jobId);
       sse.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
           if (data.progress != null) setProgress(Math.max(currentPct, 30 + Math.round(data.progress * 0.6)));
-          if (data.done || data.progress >= 100) {
-            sse.close();
-            resolve();
-          }
-          if (data.error) {
-            sse.close();
-            reject(new Error(data.error));
-          }
+          if (data.done || data.progress >= 100) { sse.close(); done(); }
+          if (data.error) { sse.close(); fail(data.error); }
         } catch {}
       };
       sse.onerror = () => {
         sse.close();
-        // SSE error might just mean job is done — check status
-        resolve();
+        // SSE pala — polling preuzima
       };
     });
 
