@@ -7,7 +7,7 @@
     "server:dev": "tsx watch server/index.ts",
     "client:dev": "vite",
     "build": "vite build",
-    "start": "node dist/index.cjs"
+    "start": "npx tsx server/index.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",
