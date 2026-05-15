@@ -105,6 +105,13 @@ select{background:#09090b;border:1px solid var(--border);color:var(--text);borde
 
 /* TOAST */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1f2937;border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:10px;font-size:13px;z-index:999;max-width:90vw;text-align:center;transition:opacity 0.3s;pointer-events:none}
+
+/* FOOTER */
+.page-footer{text-align:center;padding:18px 16px 28px;display:flex;align-items:center;justify-content:center;gap:10px;border-top:1px solid var(--border);margin-top:4px}
+.page-footer a{color:var(--accent);text-decoration:none;font-weight:700;font-size:13px;letter-spacing:-0.2px}
+.page-footer a:hover{text-decoration:underline}
+.page-footer .sep{color:var(--border);font-size:9px}
+.page-footer .ver{font-size:11px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -238,8 +245,8 @@ select{background:#09090b;border:1px solid var(--border);color:var(--text);borde
         <!-- Logo size -->
         <div class="row">
           <label>Veličina loga</label>
-          <input type="range" id="s-logosize" min="60" max="220" step="10" value="120" oninput="sv('logosize',this.value+'px')">
-          <span id="v-logosize">120px</span>
+          <input type="range" id="s-logosize" min="40" max="200" step="10" value="80" oninput="sv('logosize',this.value+'px')">
+          <span id="v-logosize">80px</span>
         </div>
 
         <!-- Logo opacity -->
@@ -300,6 +307,13 @@ select{background:#09090b;border:1px solid var(--border);color:var(--text);borde
     </button>
   </div>
 
+  <!-- FOOTER -->
+  <div class="page-footer">
+    <a href="https://peptidi.hr" target="_blank" rel="noopener">peptidi.hr</a>
+    <span class="sep">◆</span>
+    <span class="ver">Video Brander</span>
+  </div>
+
 </div>
 
 <!-- TOAST -->
@@ -316,6 +330,16 @@ let ffmpeg = null;
 let outputBlob = null;
 let progInterval = null;
 const { createFFmpeg, fetchFile } = FFmpeg;
+
+// ── WebAssembly support check ─────────────────────────────────────────────
+if (typeof WebAssembly === 'undefined' || typeof WebAssembly.instantiate !== 'function') {
+  document.addEventListener('DOMContentLoaded', function () {
+    var btn = document.getElementById('brand-btn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-ban"></i> WebAssembly nije podržan'; }
+    var st = document.getElementById('ffmpeg-status');
+    if (st) st.textContent = 'Nije podržano';
+  });
+}
 
 // ── Slider value display ──────────────────────────────────────────────────
 function sv(id, val) {
