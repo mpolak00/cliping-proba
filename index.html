@@ -484,8 +484,8 @@ let currentPct = 0;
 
 function setProgress(pct, label) {
   currentPct = Math.max(currentPct, pct);
-  document.getElementById('prog-bar').style.width = currentPct + '%';
-  document.getElementById('prog-pct').textContent = currentPct + '%';
+  document.getElementById('prog-bar').style.width = Math.round(currentPct) + '%';
+  document.getElementById('prog-pct').textContent = Math.round(currentPct) + '%';
   if (label) document.getElementById('prog-label').textContent = label;
 }
 

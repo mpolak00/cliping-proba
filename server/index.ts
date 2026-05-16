@@ -33,15 +33,28 @@ app.use(
 // ──────────────────────────────────────────
 // Rate limiting
 // ──────────────────────────────────────────
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50,
+// Strict limit only for upload/process (heavy ops)
+const heavyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
 });
 
-app.use('/api', limiter);
+// Loose limit for polling/status (called every 5s during processing)
+const pollLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api/upload', heavyLimiter);
+app.use('/api/process', heavyLimiter);
+app.use('/api/status', pollLimiter);
+app.use('/api/progress', pollLimiter);
+app.use('/api/health', pollLimiter);
 
 // Body parsers
 app.use(express.json({ limit: '10mb' }));
