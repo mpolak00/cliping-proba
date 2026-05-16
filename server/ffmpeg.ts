@@ -38,216 +38,91 @@ function randomOffset(range: number): number {
   return (Math.random() * 2 - 1) * range;
 }
 
-function buildLogoPosition(
-  position: ProcessOptions['logoPosition'],
-  size: number,
-  margin = 20
-): string {
-  const h = size;
-  const w = size;
-  switch (position) {
-    case 'TL':
-      return `x=${margin}:y=${margin}`;
-    case 'TR':
-      return `x=W-${w}-${margin}:y=${margin}`;
-    case 'BL':
-      return `x=${margin}:y=H-${h}-${margin}`;
-    case 'BR':
-    default:
-      return `x=W-${w}-${margin}:y=H-${h}-${margin}`;
-  }
-}
 
 export function processVideo(options: ProcessOptions): Promise<void> {
   return new Promise((resolve, reject) => {
-    // Auto-randomise subtle values to avoid fingerprinting
     const finalBrightness = options.brightness + randomOffset(0.03);
     const finalSaturation = options.saturation + randomOffset(0.1);
-    const pitchFactor =
-      1 + options.pitchShift / 100 + randomOffset(0.02);
+    const pitchFactor = 1 + options.pitchShift / 100 + randomOffset(0.02);
     const speedFactor = options.speed;
 
-    // ──────────────────────────────────────────
-    // Video filter chain
-    // ──────────────────────────────────────────
-    const vfFilters: string[] = [];
-
-    // 1. Scale / crop to 9:16
-    const resMap = { '540': [540, 960], '720': [720, 1280], '1080': [1080, 1920] };
+    const resMap: Record<string, [number, number]> = { '540': [540, 960], '720': [720, 1280], '1080': [1080, 1920] };
     const [rW, rH] = resMap[options.resolution ?? '720'];
-    vfFilters.push(
-      [
-        `scale=w=${rW}:h=${rH}:force_original_aspect_ratio=increase`,
-        `crop=${rW}:${rH}`,
-      ].join(',')
-    );
 
-    // 2. Colour corrections
-    const eq = [
-      `brightness=${finalBrightness.toFixed(4)}`,
-      `contrast=${options.contrast.toFixed(4)}`,
-      `saturation=${finalSaturation.toFixed(4)}`,
-    ].join(':');
-    vfFilters.push(`eq=${eq}`);
-
-    // 3. Film grain
-    if (options.addGrain) {
-      vfFilters.push('noise=c0s=8:c0f=t+u');
+    // ── Video filter string (raw, no fluent-ffmpeg FilterSpecification) ──
+    const vfParts: string[] = [
+      `scale=w=${rW}:h=${rH}:force_original_aspect_ratio=increase`,
+      `crop=${rW}:${rH}`,
+      `eq=brightness=${finalBrightness.toFixed(4)}:contrast=${options.contrast.toFixed(4)}:saturation=${finalSaturation.toFixed(4)}`,
+    ];
+    if (options.addGrain)   vfParts.push('noise=c0s=8:c0f=t+u');
+    if (options.addVignette) vfParts.push('vignette=PI/4');
+    if (options.addFlip)    vfParts.push('hflip');
+    if (options.overlayText?.trim()) {
+      const safeText = options.overlayText.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/:/g, '\\:').trim();
+      const color = options.textColor.replace(/^#/, '');
+      vfParts.push(`drawtext=text='${safeText}':fontcolor=0x${color}:fontsize=${options.fontSize}:x=(w-text_w)/2:y=h-text_h-60:shadowcolor=black:shadowx=2:shadowy=2`);
     }
+    const vfStr = vfParts.join(',');
 
-    // 4. Vignette
-    if (options.addVignette) {
-      vfFilters.push('vignette=PI/4');
-    }
-
-    // 5. Horizontal flip
-    if (options.addFlip) {
-      vfFilters.push('hflip');
-    }
-
-    // 6. Overlay text (bottom centre)
-    if (options.overlayText && options.overlayText.trim().length > 0) {
-      const safeText = options.overlayText.replace(/'/g, "\\'").replace(/:/g, '\\:');
-      const color = options.textColor.startsWith('#')
-        ? options.textColor.slice(1)
-        : options.textColor;
-      vfFilters.push(
-        `drawtext=text='${safeText}':` +
-          `fontcolor=0x${color}:` +
-          `fontsize=${options.fontSize}:` +
-          `x=(w-text_w)/2:` +
-          `y=h-text_h-60:` +
-          `shadowcolor=black:shadowx=2:shadowy=2`
-      );
-    }
-
-    // ──────────────────────────────────────────
-    // Audio filter chain
-    // ──────────────────────────────────────────
-    // asetrate changes pitch by adjusting sample rate, then atempo corrects speed
+    // ── Audio filter string ──────────────────────────────────────────────
     const newSampleRate = Math.round(44100 * pitchFactor);
     const atempoFactor = speedFactor / pitchFactor;
-    // atempo must be between 0.5 and 100; chain multiple if needed
     const atempoFilters: string[] = [];
     let remaining = Math.max(0.5, Math.min(100, atempoFactor));
-    while (remaining > 2.0) {
-      atempoFilters.push('atempo=2.0');
-      remaining /= 2.0;
-    }
-    while (remaining < 0.5) {
-      atempoFilters.push('atempo=0.5');
-      remaining /= 0.5;
-    }
+    while (remaining > 2.0) { atempoFilters.push('atempo=2.0'); remaining /= 2.0; }
+    while (remaining < 0.5) { atempoFilters.push('atempo=0.5'); remaining /= 0.5; }
     atempoFilters.push(`atempo=${remaining.toFixed(6)}`);
+    const afStr = [`asetrate=${newSampleRate}`, ...atempoFilters, 'volume=1.5', 'compand=attacks=0:points=-80/-900|-45/-15|-27/-9|0/-7|20/-7:gain=5', 'aresample=44100'].join(',');
 
-    const afFilters = [
-      `asetrate=${newSampleRate}`,
-      ...atempoFilters,
-      'volume=1.5',
-      'compand=attacks=0:points=-80/-900|-45/-15|-27/-9|0/-7|20/-7:gain=5',
-      'aresample=44100',
-    ];
-
-    // ──────────────────────────────────────────
-    // Build the command
-    // ──────────────────────────────────────────
+    // ── Build command ────────────────────────────────────────────────────
+    const hasLogo = !!(options.logoPath && fs.existsSync(options.logoPath));
     let cmd = ffmpeg(options.inputPath);
 
-    if (options.logoPath && fs.existsSync(options.logoPath)) {
-      // ── Logo: full complexFilter chain ─────────────────────────────────
-      cmd = cmd.input(options.logoPath);
+    if (hasLogo) {
+      cmd = cmd.input(options.logoPath!);
 
-      const cf: ffmpeg.FilterSpecification[] = [];
-      let cur = '0:v';
-      let idx = 0;
-      const nl = () => `v${idx++}`;
-
-      const s1 = nl();
-      cf.push({ filter: 'scale', options: `w=${rW}:h=${rH}:force_original_aspect_ratio=increase`, inputs: [cur], outputs: [s1] });
-      const s2 = nl();
-      cf.push({ filter: 'crop', options: `${rW}:${rH}`, inputs: [s1], outputs: [s2] });
-      cur = s2;
-
-      const s3 = nl();
-      cf.push({ filter: 'eq', options: eq, inputs: [cur], outputs: [s3] });
-      cur = s3;
-
-      if (options.addGrain) {
-        const s4 = nl();
-        cf.push({ filter: 'noise', options: 'c0s=8:c0f=t+u', inputs: [cur], outputs: [s4] });
-        cur = s4;
+      // Logo overlay position
+      const m = 20, sz = options.logoSize;
+      let ox: string, oy: string;
+      switch (options.logoPosition) {
+        case 'TL': ox = `${m}`;       oy = `${m}`;       break;
+        case 'TR': ox = `W-${sz}-${m}`; oy = `${m}`;     break;
+        case 'BL': ox = `${m}`;       oy = `H-${sz}-${m}`; break;
+        default:   ox = `W-${sz}-${m}`; oy = `H-${sz}-${m}`; break;
       }
 
-      if (options.addVignette) {
-        const s5 = nl();
-        cf.push({ filter: 'vignette', options: 'PI/4', inputs: [cur], outputs: [s5] });
-        cur = s5;
-      }
-
-      if (options.addFlip) {
-        const s6 = nl();
-        cf.push({ filter: 'hflip', inputs: [cur], outputs: [s6] });
-        cur = s6;
-      }
-
-      if (options.overlayText && options.overlayText.trim().length > 0) {
-        const safeText = options.overlayText.replace(/['"\\:]/g, ' ').trim();
-        const color = options.textColor.startsWith('#') ? options.textColor.slice(1) : options.textColor;
-        const s7 = nl();
-        cf.push({
-          filter: 'drawtext',
-          options: `text='${safeText}':fontcolor=0x${color}:fontsize=${options.fontSize}:x=(w-text_w)/2:y=h-text_h-60:shadowcolor=black:shadowx=2:shadowy=2`,
-          inputs: [cur],
-          outputs: [s7],
-        });
-        cur = s7;
-      }
-
-      const pos = buildLogoPosition(options.logoPosition, options.logoSize);
-      cf.push({ filter: 'scale', options: `${options.logoSize}:-2`, inputs: ['1:v'], outputs: ['ls'] });
-      cf.push({ filter: 'format', options: 'rgba', inputs: ['ls'], outputs: ['lr'] });
-      cf.push({ filter: 'colorchannelmixer', options: `aa=${options.logoOpacity.toFixed(2)}`, inputs: ['lr'], outputs: ['la'] });
-      cf.push({ filter: 'overlay', options: pos, inputs: [cur, 'la'], outputs: ['out'] });
+      // Raw filter_complex string — no fluent-ffmpeg API, full control
+      const fc = [
+        `[0:v]${vfStr}[vout]`,
+        `[1:v]scale=${sz}:-2[ls]`,
+        `[ls]format=rgba[lr]`,
+        `[lr]colorchannelmixer=aa=${options.logoOpacity.toFixed(2)}[la]`,
+        `[vout][la]overlay=${ox}:${oy}[vfinal]`,
+        `[0:a]${afStr}[afinal]`,
+      ].join(';');
 
       cmd = cmd
-        .complexFilter(cf)
-        .map('[out]')
-        .map('0:a')
-        .audioFilter(afFilters);
+        .addOption('-filter_complex', fc)
+        .addOption('-map', '[vfinal]')
+        .addOption('-map', '[afinal]');
     } else {
-      // ── No logo: simple filter chain ───────────────────────────────────
       cmd = cmd
-        .videoFilter(vfFilters)
-        .audioFilter(afFilters);
+        .videoFilter(vfStr)
+        .audioFilter(afStr);
     }
 
+    const outputOptions = ['-c:v libx264', '-crf 23', '-preset ultrafast', '-c:a aac', '-b:a 128k', '-movflags +faststart', '-r 30', '-pix_fmt yuv420p'];
+
     cmd
-      .outputOptions([
-        '-c:v libx264',
-        '-crf 23',
-        '-preset ultrafast',
-        '-c:a aac',
-        '-b:a 128k',
-        '-movflags +faststart',
-        '-r 30',
-        '-pix_fmt yuv420p',
-      ])
+      .outputOptions(outputOptions)
       .output(options.outputPath)
-      .on('start', (cmdLine) => {
-        console.log('[ffmpeg] Started:', cmdLine.substring(0, 120) + '...');
-      })
-      .on('progress', (progress) => {
-        if (options.onProgress && progress.percent != null) {
-          options.onProgress(Math.min(99, Math.round(progress.percent)));
-        }
-      })
-      .on('end', () => {
-        console.log('[ffmpeg] Processing complete:', options.outputPath);
-        resolve();
-      })
-      .on('error', (err, stdout, stderr) => {
-        console.error('[ffmpeg] Error:', err.message);
-        console.error('[ffmpeg] stderr:', stderr);
+      .on('start', (cmdLine) => { console.log('[ffmpeg] cmd:', cmdLine.slice(0, 400)); })
+      .on('progress', (p) => { if (options.onProgress && p.percent != null) options.onProgress(Math.min(99, Math.round(p.percent))); })
+      .on('end', () => { console.log('[ffmpeg] done'); resolve(); })
+      .on('error', (err, _stdout, stderr) => {
+        console.error('[ffmpeg] error:', err.message);
+        console.error('[ffmpeg] stderr:', stderr?.slice(-800));
         reject(new Error(`FFmpeg error: ${err.message}`));
       })
       .run();
