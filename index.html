@@ -681,9 +681,15 @@ async function startBrand() {
         if (settled) return;
         try {
           const r = await fetchWithTimeout(API_URL + '/api/status/' + jobId, 8000);
-          pollFails = 0;
-          if (!r.ok) return;
+          if (!r.ok) {
+            pollFails++;
+            if (r.status === 404) { fail('Server se restartao — job izgubljen. Pokušaj ponovo.'); return; }
+            log('Server greška ' + r.status + ' (' + pollFails + '/8)', 'warn');
+            if (pollFails >= 8) fail('Server nedostupan — pokušaj ponovo');
+            return;
+          }
           const d = await r.json();
+          pollFails = 0;
           if (d.status === 'done' && d.hasOutput) { done(); }
           else if (d.status === 'error') { fail(d.errorMessage || 'FFmpeg greška'); }
         } catch {
