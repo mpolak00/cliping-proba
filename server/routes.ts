@@ -169,7 +169,9 @@ router.post('/process', async (req: Request, res: Response) => {
             processOpts.outputPath,
             options.outroText || '',
             meta.outroImagePath,
-            outputPath
+            outputPath,
+            options.resolution ?? '720',
+            (pct) => emitProgress(job.id, pct)
           );
           // cleanup intermediate
           try {
@@ -251,11 +253,16 @@ router.get('/progress/:jobId', async (req: Request, res: Response) => {
   const current = progressMap.get(jobId) ?? 0;
   res.write(`data: ${JSON.stringify({ progress: current })}\n\n`);
 
+  const keepAlive = setInterval(() => {
+    res.write(`: keep-alive ${Date.now()}\n\n`);
+  }, 15000);
+
   const clientList = sseClients.get(jobId) || [];
   clientList.push(res);
   sseClients.set(jobId, clientList);
 
   req.on('close', () => {
+    clearInterval(keepAlive);
     const list = sseClients.get(jobId) || [];
     const filtered = list.filter((c) => c !== res);
     if (filtered.length === 0) {

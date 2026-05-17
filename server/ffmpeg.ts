@@ -137,17 +137,30 @@ export function appendOutro(
   mainVideoPath: string,
   outroText: string,
   outroImagePath: string | undefined,
-  outputPath: string
+  outputPath: string,
+  resolution: ProcessOptions['resolution'] = '720',
+  onProgress?: (progress: number) => void
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const tmpOutro = path.join(os.tmpdir(), `outro_${Date.now()}.mp4`);
+    const resMap: Record<NonNullable<ProcessOptions['resolution']>, [number, number]> = {
+      '540': [540, 960],
+      '720': [720, 1280],
+      '1080': [1080, 1920],
+    };
+    const [rW, rH] = resMap[resolution ?? '720'];
+    const imageSize = Math.round(rW * 0.37);
+    const imageYOffset = Math.round(rH * 0.04);
+    const textYOffset = Math.round(rH * 0.09);
+    const fontSize = Math.max(28, Math.round(rW * 0.045));
 
     // Step 1: generate the 2s outro clip
-    const outroFilters: string[] = [];
-
-    // Black 1080x1920 background for 2 seconds
+    // Match the processed video's dimensions and include silent audio so concat
+    // does not stall or fail after the main render reaches 90%.
     let outroCmd = ffmpeg()
-      .input('color=black:size=1080x1920:rate=30:duration=2')
+      .input(`color=black:size=${rW}x${rH}:rate=30:duration=2`)
+      .inputFormat('lavfi')
+      .input('anullsrc=channel_layout=stereo:sample_rate=44100')
       .inputFormat('lavfi');
 
     const complexFilters: ffmpeg.FilterSpecification[] = [];
@@ -157,13 +170,13 @@ export function appendOutro(
       complexFilters.push(
         {
           filter: 'scale',
-          options: '400:400',
-          inputs: ['1:v'],
+          options: `${imageSize}:${imageSize}:force_original_aspect_ratio=decrease`,
+          inputs: ['2:v'],
           outputs: ['img_scaled'],
         },
         {
           filter: 'overlay',
-          options: 'x=(W-400)/2:y=(H-400)/2-80',
+          options: `x=(W-w)/2:y=(H-h)/2-${imageYOffset}`,
           inputs: ['0:v', 'img_scaled'],
           outputs: ['bg_with_img'],
         }
@@ -175,9 +188,9 @@ export function appendOutro(
           options: {
             text: outroText.replace(/'/g, "\\'"),
             fontcolor: 'white',
-            fontsize: '48',
+            fontsize: String(fontSize),
             x: '(w-text_w)/2',
-            y: '(h-text_h)/2+180',
+            y: `(h-text_h)/2+${textYOffset}`,
             shadowcolor: 'black',
             shadowx: '2',
             shadowy: '2',
@@ -199,7 +212,7 @@ export function appendOutro(
           options: {
             text: outroText.replace(/'/g, "\\'"),
             fontcolor: 'white',
-            fontsize: '48',
+            fontsize: String(fontSize),
             x: '(w-text_w)/2',
             y: '(h-text_h)/2',
             shadowcolor: 'black',
@@ -218,19 +231,31 @@ export function appendOutro(
       }
     }
 
+    complexFilters.push({
+      filter: 'anull',
+      inputs: ['1:a'],
+      outputs: ['outro_audio'],
+    });
+
     outroCmd
       .complexFilter(complexFilters)
       .map('[outro]')
+      .map('[outro_audio]')
       .outputOptions([
         '-c:v libx264',
         '-crf 23',
         '-t 2',
-        '-an',
+        '-c:a aac',
+        '-b:a 128k',
+        '-ar 44100',
+        '-shortest',
         '-pix_fmt yuv420p',
         '-r 30',
       ])
       .output(tmpOutro)
+      .on('progress', () => onProgress?.(93))
       .on('end', () => {
+        onProgress?.(95);
         // Step 2: concat main + outro
         const concatListPath = path.join(os.tmpdir(), `concat_${Date.now()}.txt`);
         fs.writeFileSync(
@@ -250,22 +275,28 @@ export function appendOutro(
             '-pix_fmt yuv420p',
           ])
           .output(outputPath)
+          .on('progress', () => onProgress?.(98))
           .on('end', () => {
             // cleanup tmp files
             try {
               fs.unlinkSync(tmpOutro);
               fs.unlinkSync(concatListPath);
             } catch {}
+            onProgress?.(99);
             resolve();
           })
-          .on('error', (err) => {
-            reject(new Error(`Outro concat error: ${err.message}`));
-          })
-          .run();
+      .on('error', (err, _stdout, stderr) => {
+        console.error('[ffmpeg] outro concat error:', err.message);
+        console.error('[ffmpeg] outro concat stderr:', stderr?.slice(-800));
+        reject(new Error(`Outro concat error: ${err.message}`));
       })
-      .on('error', (err) => {
-        reject(new Error(`Outro generation error: ${err.message}`));
-      })
+      .run();
+  })
+  .on('error', (err, _stdout, stderr) => {
+    console.error('[ffmpeg] outro generation error:', err.message);
+    console.error('[ffmpeg] outro generation stderr:', stderr?.slice(-800));
+    reject(new Error(`Outro generation error: ${err.message}`));
+  })
       .run();
   });
 }

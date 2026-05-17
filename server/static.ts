@@ -1,10 +1,8 @@
 import { type Express, type Request, type Response, type NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
-import { createProxyMiddleware } from 'http-proxy-middleware';
-
 // Re-export a function that wires static serving or dev proxy
-export function setupStatic(app: Express): void {
+export async function setupStatic(app: Express): Promise<void> {
   const isDev = process.env.NODE_ENV !== 'production';
 
   if (isDev) {

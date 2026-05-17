@@ -43,6 +43,10 @@ function $input(id: string): HTMLInputElement {
   return $ (id) as HTMLInputElement;
 }
 
+function $select(id: string): HTMLSelectElement {
+  return $(id) as HTMLSelectElement;
+}
+
 function showAlert(message: string, type: 'error' | 'success' = 'error'): void {
   const alertEl = $('alert-box');
   alertEl.textContent = message;
@@ -138,7 +142,7 @@ function bindSlider(sliderId: string, displayId: string, transform?: (v: number)
 // ──────────────────────────────────────────
 function getOptions(): ProcessOptions {
   return {
-    logoPosition: ($input('logo-position') as HTMLSelectElement).value as ProcessOptions['logoPosition'],
+    logoPosition: $select('logo-position').value as ProcessOptions['logoPosition'],
     logoSize: parseInt($input('logo-size').value, 10),
     logoOpacity: parseFloat($input('logo-opacity').value),
     overlayText: $input('overlay-text').value,
